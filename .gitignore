@@ -1,0 +1,65 @@
+# --- Python Stuffs ---
+# Byte-compiled / optimized / C extensions
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+eggs/
+
+# Virtual Environments
+.env
+.venv
+env/
+venv/
+
+# --- LangChain & AI Specific ---
+# Environment variables - DO NOT COMMIT YOUR API KEYS! 🔑
+.env*
+!/.env.example
+
+# Local Vector Stores & Databases
+.chroma/
+db/
+faiss_index/
+vector_stores/
+*.sqlite3
+*.db
+
+# Caches
+.cache/
+.langchain_cache/
+
+# Log files
+*.log
+logs/
+
+# Large data files (consider using Git LFS for these instead)
+# data/
+# *.pdf
+# *.csv
+# *.jsonl
+
+# --- IDE & Editor Configs ---
+# VSCode
+.vscode/
+
+# PyCharm
+.idea/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# --- Testing ---
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
