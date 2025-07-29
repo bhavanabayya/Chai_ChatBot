@@ -1,3 +1,7 @@
+# Project specific
+invoice_*.pdf
+
+
 # --- Python Stuffs ---
 # Byte-compiled / optimized / C extensions
 __pycache__/
