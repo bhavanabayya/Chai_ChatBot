@@ -1,5 +1,6 @@
 import os
 from langchain.agents import Tool
+from langchain_core.tools import tool
 from dotenv import load_dotenv
 
 from paypal_agent_toolkit.langchain.toolkit import PayPalToolkit
@@ -54,6 +55,45 @@ def get_paypal_tools() -> list[Tool]:
 
     return toolkit.get_tools()
 
-# Combine with other payment methods
+# Combine with other payment methods later
 
-# payment_tool = generate_payment_link
+#
+#
+#
+
+order_id: str = ""
+
+@tool
+def save_order_id(new_order_id: str) -> str:
+    """
+    Saves the provided PayPal order ID to a global variable for later use.
+    This is useful for persisting the order ID between different agent steps or calls.
+    
+    Args:
+        new_order_id (str): The PayPal order ID to save.
+        
+    Returns:
+        str: A confirmation message indicating the order ID has been saved.
+    """
+    global order_id
+    order_id = new_order_id
+    return f"Order ID '{order_id}' has been saved successfully."
+
+
+@tool
+def get_order_id() -> str:
+    """
+    Retrieves the previously saved PayPal order ID from a global variable.
+    Use this tool to get the order ID that was saved using the `save_order_id` tool.
+    
+    Returns:
+        str: The saved PayPal order ID, or a message if no ID has been saved yet.
+    """
+    if order_id:
+        return order_id
+    else:
+        return "No order ID has been saved yet."
+
+
+# payment_tool = get_paypal_tools()
+order_tools = [save_order_id, get_order_id]
