@@ -3,7 +3,7 @@ from langchain.agents import Tool
 from tools.create_invoice import create_invoice_tool
 from tools.products_tool import products_tool
 from tools.payment_tool import get_paypal_tools
-from tools.fedex_tool import fedex_tool
+from tools.fedex_tool import create_fedex_shipment as fedex_tool
 from tools.calendar_tool import calendar_tool
 from tools.add_to_cart_tool import add_to_cart_tool
 from tools.view_cart_tool import view_cart_tool

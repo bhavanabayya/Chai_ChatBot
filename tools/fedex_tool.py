@@ -1,11 +1,31 @@
-from langchain_core.tools import tool
+from langchain.agents import tool
+from Authentication import get_fedex_token
+from Create_Shipment import create_shipment
 
 @tool
-def generate_shipping_label(order_id: str) -> str:
+def create_fedex_shipment() -> str:
     """
-    Generate a FedEx shipping label for the given order ID.
+    Creates a FedEx shipment using sandbox credentials.
+    Returns tracking number and label URL.
     """
-    label_link = f"https://fedex.example.com/label/{order_id}"
-    return f"🚚 Shipping label generated! Track your shipment here: {label_link}"
+    token = get_fedex_token()
+    result = create_shipment(token)
 
-fedex_tool = generate_shipping_label
+    if "error" in result:
+        return f"❌ FedEx Shipment Failed: {result['error']}\nDetails: {result.get('details', '')}"
+
+    shipment = result['output']['transactionShipments'][0]
+    tracking = shipment['masterTrackingNumber']
+    label_url = shipment['pieceResponses'][0]['packageDocuments'][0]['url']
+    
+    # local_file_path = download_label(label_url)
+
+    msg = (
+        f"📦 Shipment Created!\n"
+        f"Tracking: {tracking}\n"
+        f"Label URL: {label_url}"
+    )
+
+    print(f"DEBUG: returning string:\n{msg}")
+    return msg
+
