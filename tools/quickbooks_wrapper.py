@@ -2,8 +2,11 @@ import os
 import requests
 from requests.auth import HTTPBasicAuth
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+#  Resolve absolute path to .env and load it
+env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 class QuickBooksWrapper:
     def __init__(self):
@@ -11,9 +14,15 @@ class QuickBooksWrapper:
         self.token_url = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"
         self.client_id = os.getenv("QB_CLIENT_ID")
         self.client_secret = os.getenv("QB_CLIENT_SECRET")
-        self.refresh_token = os.getenv("QB_REFRESH_TOKEN")
-        self.access_token = os.getenv("QB_ACCESS_TOKEN")
         self.realm_id = os.getenv("QB_REALM_ID")
+
+        # Load tokens fresh every time to ensure you're not using stale ones
+        self._load_tokens()
+
+    def _load_tokens(self):
+        load_dotenv(dotenv_path=env_path)  # re-load updated values
+        self.access_token = os.getenv("QB_ACCESS_TOKEN")
+        self.refresh_token = os.getenv("QB_REFRESH_TOKEN")
 
     def _refresh_access_token(self):
         headers = {
@@ -32,17 +41,20 @@ class QuickBooksWrapper:
             self.access_token = tokens["access_token"]
             self.refresh_token = tokens.get("refresh_token", self.refresh_token)
             self._save_tokens()
+            self._load_tokens()  # ensure tokens in memory are fresh
+            print(" QuickBooks tokens refreshed.")
         else:
             raise Exception(f"Failed to refresh token: {response.status_code} - {response.text}")
 
     def _save_tokens(self):
-        with open(".env", "r") as f:
+        with open(env_path, "r") as f:
             lines = f.readlines()
-        with open(".env", "w") as f:
+
+        with open(env_path, "w") as f:
             for line in lines:
-                if line.startswith("QB_ACCESS_TOKEN"):
+                if line.startswith("QB_ACCESS_TOKEN="):
                     f.write(f"QB_ACCESS_TOKEN={self.access_token}\n")
-                elif line.startswith("QB_REFRESH_TOKEN"):
+                elif line.startswith("QB_REFRESH_TOKEN="):
                     f.write(f"QB_REFRESH_TOKEN={self.refresh_token}\n")
                 else:
                     f.write(line)
@@ -54,7 +66,10 @@ class QuickBooksWrapper:
         kwargs["headers"] = headers
 
         response = requests.request(method, url, **kwargs)
+
+        # If token expired, refresh and retry once
         if response.status_code == 401:
+            print(" Access token expired. Refreshing...")
             self._refresh_access_token()
             headers["Authorization"] = f"Bearer {self.access_token}"
             kwargs["headers"] = headers
@@ -82,9 +97,6 @@ class QuickBooksWrapper:
         response = self._make_authenticated_request("GET", url, headers=headers)
 
         if response.status_code == 200:
-            file_name = f"invoice_{invoice_id}.pdf"
-            with open(file_name, "wb") as f:
-                f.write(response.content)
-            return f"Invoice PDF saved as {file_name}"
+            return response.content  #  Return PDF bytes to stream via FastAPI
         else:
             raise Exception(f"PDF fetch failed: {response.status_code} - {response.text}")

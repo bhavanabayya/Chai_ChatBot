@@ -1,5 +1,6 @@
 import os
 import sys
+import io
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from dotenv import load_dotenv
@@ -8,14 +9,36 @@ from langchain.agents import initialize_agent, AgentExecutor, create_tool_callin
 from langchain.memory import ConversationBufferMemory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import tool
+from tools.quickbooks_wrapper import QuickBooksWrapper
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+from pathlib import Path
 
 from tools.tool_config import get_all_tools
 
-# Load .env
-load_dotenv()
+env_path = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(dotenv_path=env_path)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_MODEL = os.getenv("OPENAI_API_MODEL")
+
+# Initialize FastAPI app
+app = FastAPI()
+
+# Initialize QuickBooks wrapper
+qb = QuickBooksWrapper()
+
+# Endpoint to download invoice PDF
+@app.get("/download/invoice/{invoice_id}")
+def download_invoice(invoice_id: str):
+    try:
+        pdf_bytes = qb.get_invoice_pdf(invoice_id)
+        return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf", headers={
+            "Content-Disposition": f"attachment; filename=invoice_{invoice_id}.pdf"
+        })
+    except Exception as e:
+        return {"error": str(e)}
+
 
 # Create the Langchain Agent
 def create_agent():
@@ -59,6 +82,7 @@ def create_agent():
     4. Generate an invoice and give the pdf to the customer for customer 58 using invoice_tool (Use the format: 'Generate 2 Madras Coffee and 1 Cardamom Chai for customer 58' to interface with the tool). Let the customer verify everything is correct.
     5. Once confirmed, use a tool from the PayPal toolkit to generate a payment link for the order. Use order tools to keep track of order ID.
     6. Once the customer says that they have paid, use the order number to confirm that they have indeed done so. Output the details to the customer
+    7. After the order is finalized using FinalizeOrder, use the 'create_fedex_shipment' from fedex_tool to create a shipment for the order and display the tracking number and label URL..    
     """
 
     prompt = ChatPromptTemplate.from_messages(

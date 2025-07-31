@@ -42,6 +42,11 @@ To run the main application script, execute the following command from the root 
 Ensure your virtual environment is active whenever you run the project.
 
 
+## 5. Running the FastAPI Backend
+To start the backend API server:
+
+    uvicorn backend.main:app --reload --port 8000
+
 
 
 ## Deactivating the Environment
@@ -49,3 +54,4 @@ Ensure your virtual environment is active whenever you run the project.
 When you are finished working on the project, you can deactivate the environment and return to your global Python context by simply running:
 
 `````deactivate`````
+Follow the steps below to set up and run the project on your local machine.
