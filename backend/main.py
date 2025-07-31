@@ -3,7 +3,6 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from dotenv import load_dotenv
-import streamlit as st
 from langchain_openai import ChatOpenAI
 from langchain.agents import initialize_agent, AgentExecutor, create_tool_calling_agent
 from langchain.memory import ConversationBufferMemory
@@ -57,7 +56,7 @@ def create_agent():
     1. Greet the user and ask how you can help.
     2. If the user asks about products, use products_tool.
     3. Use the cart tools when user wants to add or remove items from their order, view cart and clear cart.
-    4. Generate an invoice and give the pdf to the customer for customer 58 using invoice_tool (Use the format: 'Generate 2 Madras Coffee and 1 Cardamom Chai for customer 58' to interface with the tool). Convert the pdf that is saved to an image and show it to the customer, so that the customer can verify everything is correct.
+    4. Generate an invoice and give the pdf to the customer for customer 58 using invoice_tool (Use the format: 'Generate 2 Madras Coffee and 1 Cardamom Chai for customer 58' to interface with the tool). Let the customer verify everything is correct.
     5. Once confirmed, use a tool from the PayPal toolkit to generate a payment link for the order. Use order tools to keep track of order ID.
     6. Once the customer says that they have paid, use the order number to confirm that they have indeed done so. Output the details to the customer
     """

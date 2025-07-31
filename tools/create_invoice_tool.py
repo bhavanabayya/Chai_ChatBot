@@ -19,7 +19,9 @@ def create_invoice_tool(input_text: str) -> str:
     name_to_id = {
         "madras coffee": ("19", 20),
         "cardamom chai": ("20", 16),
-        "elaichi chai": ("21", 18)
+        "elaichi chai": ("21", 16),
+        "ginger chai": ("22", 15),
+        "masala chai": ("23", 20),
     }
 
     line_items = []

@@ -39,7 +39,6 @@ if prompt := st.chat_input("What can I help you with today?"):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                # ✅ Step 3: Run the PERSISTENT agent from session_state
                 agent = st.session_state.agent_executor
                 response = agent.invoke({"input": prompt})
                 agent_response = response.get("output", "Sorry, I ran into an issue.")
