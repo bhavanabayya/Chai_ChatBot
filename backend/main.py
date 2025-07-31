@@ -1,85 +1,114 @@
-
 import os
+import sys
+import io
+
 from dotenv import load_dotenv
-import streamlit as st
-
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from langchain_openai import ChatOpenAI
-from langchain.agents import initialize_agent, AgentType
-from langchain.memory import ConversationBufferMemory
-
+from langchain.agents import Tool, AgentExecutor, create_tool_calling_agent
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from tools.create_invoice import create_invoice_tool
+from tools.summary_tool import generate_summary
 from tools.tool_config import get_all_tools
+from tools.quickbooks_wrapper import QuickBooksWrapper
 from backend.chat_state import ChatState, ChatStage
+import streamlit as st
+from dotenv import load_dotenv
+from pathlib import Path
 
-# Load .env
-load_dotenv()
+env_path = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(dotenv_path=env_path)
 
-# Initialize session state
-if "session" not in st.session_state:
-    st.session_state.session = ChatState()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_MODEL = os.getenv("OPENAI_API_MODEL")
 
-# Initialize LLM
-llm = ChatOpenAI(
-    temperature=0,
-    model="gpt-4",  
-    openai_api_key=os.getenv("OPENAI_API_KEY")
-)
+# Initialize FastAPI app
+app = FastAPI()
 
-# Memory and tools
-memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-tools = get_all_tools()
+# Initialize QuickBooks wrapper
+qb = QuickBooksWrapper()
 
-agent = initialize_agent(
-    tools=tools,
-    llm=llm,
-    agent=AgentType.OPENAI_FUNCTIONS,
-    memory=memory,
-    verbose=True
-)
+# Endpoint to download invoice PDF
+@app.get("/download/invoice/{invoice_id}")
+def download_invoice(invoice_id: str):
+    try:
+        pdf_bytes = qb.get_invoice_pdf(invoice_id)
+        return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf", headers={
+            "Content-Disposition": f"attachment; filename=invoice_{invoice_id}.pdf"
+        })
+    except Exception as e:
+        return {"error": str(e)}
 
-# Streamlit UI
-st.set_page_config(page_title="Chai Corner Chatbot")
-st.title("Chai Corner Chatbot")
+# Initialize LangChain agent
+def initialize_agent():
+    tools = get_all_tools()
 
-user_input = st.text_input("Say something:", key="user_input")
+    llm = ChatOpenAI(
+        model=OPENAI_API_MODEL or "gpt-3.5-turbo",
+        temperature=0,
+        openai_api_key=OPENAI_API_KEY
+    )
 
-if user_input:
-    session = st.session_state.session
+    SYSTEM_PROMPT = """
+    You are a friendly and helpful AI assistant for an e-commerce business called Chai Corner.
+    Your goal is to help customers find products, add them to a cart, and complete their purchase.
+    Be conversational and guide the user step-by-step.
 
-    if session.stage == ChatStage.GREETING:
-        session.stage = ChatStage.ORDER_TAKING
-        st.markdown(" Hi! Welcome to Chai Corner! How can I help you today?")
+    Here are the tools you have access to:
+    {{tools}}
 
-    elif session.stage == ChatStage.ORDER_TAKING:
-        session.order_details = user_input
-        result = agent.invoke({"input": f"Generate invoice for: {user_input}"})
-        session.invoice_link = result if isinstance(result, str) else str(result)
-        session.stage = ChatStage.AFTER_INVOICE
-        st.markdown(f" Invoice generated: {session.invoice_link}")
-        st.markdown("Would you like to add/change items or proceed to payment?")
+    Follow this process:
+    1. Greet the user and ask how you can help.
+    2. If the user asks about products, use products_tool.
+    3. When the user wants to add a product, use the 'AddToCart' tool.
+    4. Before payment, always use 'ViewCart' to confirm the order details and total with the customer.
+    5. Once confirmed, use a tool from the PayPal toolkit to generate a payment link.
+    6. After the user confirms they have paid, use the 'FinalizeOrder' tool to complete the process.
+    7. Do not make up product IDs or prices. Only use the information provided by the tools.
+    """
 
-    elif session.stage == ChatStage.AFTER_INVOICE:
-        if "proceed" in user_input.lower():
-            session.stage = ChatStage.PAYMENT
-            st.markdown(f" You can pay using Venmo: {session.venmo_link}")
-        elif "add" in user_input.lower() or "change" in user_input.lower():
-            session.stage = ChatStage.UPDATED_ORDER
-            st.markdown(" What changes would you like to make to your order?")
-        else:
-            st.warning("Please say if you'd like to update the order or proceed to payment.")
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", SYSTEM_PROMPT),
+        MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ("human", "{input}"),
+    ])
 
-    elif session.stage == ChatStage.UPDATED_ORDER:
-        session.updated_order = user_input
-        result = agent.invoke({"input": f"Generate updated invoice for: {user_input}"})
-        session.invoice_link = result if isinstance(result, str) else str(result)
-        session.stage = ChatStage.AFTER_INVOICE
-        st.markdown(f" Updated invoice: {session.invoice_link}")
-        st.markdown("Would you like to proceed to payment?")
+    agent = create_tool_calling_agent(llm, tools, prompt)
+    executor = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True)
 
-    elif session.stage == ChatStage.PAYMENT:
-        session.stage = ChatStage.SHIPPING
-        result = agent.invoke({"input": f"Generate FedEx shipping label for: {session.order_details}"})
-        session.shipping_label = result if isinstance(result, str) else str(result)
-        st.markdown(f" Payment confirmed. Shipping label: {session.shipping_label}")
+    return executor
 
-    else:
-        st.warning("Something went wrong. Please say 'hi' to restart.")
+# Core interaction logic
+def run_agent(query: str) -> str:
+    agent_executor = initialize_agent()
+    chat_state = st.session_state.chat_state
+    
+    if chat_state.stage == ChatStage.GREETING:
+        if "order" in query.lower() or "chai" in query.lower():
+            chat_state.latest_order_text = query
+            chat_state.summary_text = generate_summary(query)
+            chat_state.stage = ChatStage.ORDER_SUMMARY
+            return f"🛍️ Here’s your order summary:\n\n{chat_state.summary_text}\n\nWould you like to proceed to generate the invoice?"
+
+    if chat_state.stage == ChatStage.ORDER_SUMMARY and "yes" in query.lower():
+        result = create_invoice_tool.invoke(f"{chat_state.latest_order_text} for customer 58")
+        chat_state.stage = ChatStage.INVOICE_GENERATED
+        return f"{result}\n\nShall I proceed to payment or do you want to make changes to your order?"
+
+    if chat_state.stage == ChatStage.INVOICE_GENERATED:
+        if "proceed" in query.lower() or "yes" in query.lower():
+            chat_state.stage = ChatStage.AWAITING_PAYMENT_CONFIRMATION
+            return "🧾 Please complete your payment using the following PayPal link:\n[Pay with PayPal](https://paypal.com/your-link)"
+        elif "change" in query.lower() or "update" in query.lower():
+            chat_state.stage = ChatStage.ORDER_UPDATED
+            return "Sure! What changes would you like to make to your order?"
+
+    if chat_state.stage == ChatStage.ORDER_UPDATED:
+        chat_state.latest_order_text = query
+        chat_state.summary_text = generate_summary(query)
+        updated_invoice = create_invoice_tool.invoke(query)
+        chat_state.stage = ChatStage.INVOICE_GENERATED
+        return f"✅ Updated order summary:\n\n{chat_state.summary_text}\n\n{updated_invoice}\n\nWould you like to proceed to payment or make more changes?"
+
+    return agent_executor.invoke({"input": query}).get("output", "I couldn’t understand that request.")

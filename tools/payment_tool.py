@@ -1,8 +1,7 @@
 import os
 from langchain.agents import Tool
 from dotenv import load_dotenv
-# from tools.paypal_agent_toolkit.langchain.toolkit import PayPalToolkit
-# from tools.paypal_agent_toolkit.shared.configuration import Configuration, Context
+
 from paypal_agent_toolkit.langchain.toolkit import PayPalToolkit
 from paypal_agent_toolkit.shared.configuration import Configuration, Context
 
@@ -56,5 +55,4 @@ def get_paypal_tools() -> list[Tool]:
     return toolkit.get_tools()
 
 # Combine with other payment methods
-
 # payment_tool = generate_payment_link
