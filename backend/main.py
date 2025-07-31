@@ -43,7 +43,6 @@ def download_invoice(invoice_id: str):
 # Initialize LangChain agent
 def initialize_agent():
     tools = get_all_tools()
-
     llm = ChatOpenAI(
         model=OPENAI_API_MODEL or "gpt-3.5-turbo",
         temperature=0,
@@ -66,6 +65,7 @@ def initialize_agent():
     5. Once confirmed, use a tool from the PayPal toolkit to generate a payment link.
     6. After the user confirms they have paid, use the 'FinalizeOrder' tool to complete the process.
     7. Do not make up product IDs or prices. Only use the information provided by the tools.
+    8. After the order is finalized using FinalizeOrder, use the 'create_fedex_shipment' from fedex_tool to create a shipment for the order and display the tracking number and label URL..
     """
 
     prompt = ChatPromptTemplate.from_messages([
