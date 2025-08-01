@@ -33,19 +33,18 @@ With the virtual environment active, install the required Python packages using 
 
 Congratulations! Your development environment is now ready.
 
-## 4. Running the Project
+## 4. Running the FastAPI Backend
+To start the backend API server:
+
+    uvicorn backend.main:app --reload --port 8000
+
+## 5. Running the Project
 
 To run the main application script, execute the following command from the root directory:
 
 `````streamlit run frontend/app.py`````
 
 Ensure your virtual environment is active whenever you run the project.
-
-
-## 5. Running the FastAPI Backend
-To start the backend API server:
-
-    uvicorn backend.main:app --reload --port 8000
 
 
 
