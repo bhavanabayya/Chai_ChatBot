@@ -1,8 +1,12 @@
 import requests
-from fedex_config import CLIENT_ID, CLIENT_SECRET
+import os
 
 # FedEx sandbox OAuth endpoint
 OAUTH_URL = "https://apis-sandbox.fedex.com/oauth/token"
+
+CLIENT_ID = os.getenv("FEDEX_CLIENT_ID")
+CLIENT_SECRET = os.getenv("FEDEX_CLIENT_SECRET")
+
 
 def get_fedex_token():
     data = {

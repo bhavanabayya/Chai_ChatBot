@@ -1,8 +1,10 @@
 import requests
-from fedex_config import ACCOUNT_NUMBER
-from Authentication import get_fedex_token
+import os
 
 SHIPMENT_URL = "https://apis-sandbox.fedex.com/ship/v1/shipments"
+
+
+ACCOUNT_NUMBER = os.getenv("FEDEX_ACCOUNT_NUMBER")
 
 def create_shipment(token: str) -> dict:
     headers = {
@@ -14,7 +16,7 @@ def create_shipment(token: str) -> dict:
     payload = {
   "labelResponseOptions": "URL_ONLY",
   "accountNumber": {
-    "value": "740561073"
+    "value": ACCOUNT_NUMBER,
   },
   "requestedShipment": {
     "shipDatestamp": "2025-08-01",
