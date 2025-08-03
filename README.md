@@ -23,7 +23,7 @@ On Windows (PowerShell):
 `````.venv\Scripts\Activate.ps1`````
 
 Note: If you get an error in PowerShell about script execution being disabled, you may need to set the execution policy for your session by running:
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+`````Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process`````
 
 ## 3. Install Dependencies
 
