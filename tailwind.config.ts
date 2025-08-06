@@ -52,6 +52,17 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+				// Chat-specific colors
+				'chat-bg': 'hsl(var(--chat-background))',
+				'user-message': {
+					DEFAULT: 'hsl(var(--user-message))',
+					foreground: 'hsl(var(--user-message-foreground))'
+				},
+				'assistant-message': {
+					DEFAULT: 'hsl(var(--assistant-message))',
+					foreground: 'hsl(var(--assistant-message-foreground))'
+				},
+				'message-border': 'hsl(var(--message-border))',
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
