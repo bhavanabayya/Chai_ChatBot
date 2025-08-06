@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChatWindow } from "@/components/ChatWindow";
 import { ChatInput } from "@/components/ChatInput";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { type Message } from "@/components/ChatMessage";
 
 const Index = () => {
@@ -48,14 +49,17 @@ const Index = () => {
     <div className="h-screen flex flex-col bg-gradient-to-b from-background to-chat-bg">
       {/* Header */}
       <div className="border-b border-border bg-background/95 backdrop-blur-sm px-4 py-3">
-        <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-orange-500 rounded-full flex items-center justify-center">
-            <span className="text-sm">🫖</span>
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-primary to-orange-500 rounded-full flex items-center justify-center">
+              <span className="text-sm">🫖</span>
+            </div>
+            <div>
+              <h1 className="font-semibold text-foreground">Chai Corner</h1>
+              <p className="text-xs text-muted-foreground">AI E-commerce Assistant</p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-semibold text-foreground">Chai Corner</h1>
-            <p className="text-xs text-muted-foreground">AI E-commerce Assistant</p>
-          </div>
+          <ThemeToggle />
         </div>
       </div>
 
