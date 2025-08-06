@@ -1,89 +1,74 @@
-import sys
 import os
+import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+import re
+import logging
+from pathlib import Path
 import streamlit as st
-from dotenv import load_dotenv
 
-from langchain_openai import ChatOpenAI
-from langchain.agents import initialize_agent, AgentType
-from langchain.memory import ConversationBufferMemory
+from backend.main import create_agent
+# from backend.chat_state import ChatState, ChatStage
 
-from tools.tool_config import get_all_tools
-from backend.chat_state import ChatState, ChatStage
-
-load_dotenv()
-
-# Load tools
-intuit_tool, venmo_tool, fedex_tool, calendar_tool, gmail_tool = get_all_tools()
+if "agent_executor" not in st.session_state:
+    st.session_state.agent_executor = create_agent()
 
 # Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": " Hi! Welcome to Chai Corner! How can I help you today?"}
+        {"role": "assistant", "content": "Hi! Welcome to Chai Corner! How can I help you today?"}
     ]
 
-if "chat_state" not in st.session_state:
-    st.session_state.chat_state = ChatState()
+# if "chat_state" not in st.session_state:
+#     st.session_state.chat_state = ChatState()
 
-st.title(" Chai Corner Chatbot")
-prompt = st.chat_input("Type your message:")
+st.title("Chai Corner Chatbot")
 
-# Display chat messages
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+# --- Display Chat Messages ---
+# Iterate through the messages stored in session_state and display them.
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-if prompt:
-    # Show user message
-    st.chat_message("user").markdown(prompt)
+# --- Handle User Input ---
+if prompt := st.chat_input("What can I help you with today?"):
+    # Add and display user message
     st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-    # Chatbot logic
-    response = ""
-    session = st.session_state.chat_state
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            try:
+                agent = st.session_state.agent_executor
+                response = agent.invoke({"input": prompt})
+                agent_response = response.get("output", "Sorry, I ran into an issue.")
+                st.markdown(agent_response)
+                # Add agent's response to chat history
+                st.session_state.messages.append({"role": "assistant", "content": agent_response})
 
-    if session.stage == ChatStage.GREETING:
-        if any(word in prompt.lower() for word in ["order", "chai", "coffee"]):
-            order = prompt
-            invoice_url = intuit_tool(order)  # should return just the URL string
-            session.order = order
-            session.invoice_link = invoice_url
-            session.stage = ChatStage.INVOICE_SENT
+                #  Show download button if invoice is generated
+                if "Download Invoice" in agent_response:
+                    match = re.search(r"/download/(invoice_\d+\.pdf)", agent_response)
+                    if match:
+                        DOWNLOAD_DIR = Path(__file__).parent.parent / "invoices"
+                        pdf_path = DOWNLOAD_DIR / match.group(1)
+                        if pdf_path.exists():
+                            with open(pdf_path, "rb") as f:
+                                st.download_button(
+                                    label=" Download Invoice PDF",
+                                    data=f,
+                                    file_name=match.group(1),
+                                    mime="application/pdf"
+                                )
+                                
+            except Exception as e:
+                error_message = f"An error occurred: {e}"
+                st.error(error_message)
+                st.session_state.messages.append({"role": "assistant", "content": error_message})
 
-            response = (
-                f" Sure! Here's your invoice for the order: [View Invoice]({invoice_url})\n\n"
-                "Would you like to add items, change the order, or proceed to payment?"
-            )
-        else:
-            response = " I'm here to help with chai orders, invoices, payments, and shipping!"
+            # st.markdown(agent_response)
 
-    elif session.stage == ChatStage.INVOICE_SENT:
-        if "proceed" in prompt.lower():
-            session.stage = ChatStage.PAYMENT_LINK_SENT
-            response = f"💳 Please proceed with the payment using this Venmo link: [{session.venmo_link}]({session.venmo_link})"
-        elif "change" in prompt.lower() or "add" in prompt.lower():
-            updated_order = prompt
-            session.order = updated_order
-            session.invoice_link = intuit_tool(updated_order)
-            response = f"🔄 Your order has been updated. Here is your new invoice: [View Invoice]({session.invoice_link})\n\nWould you like to proceed to payment?"
-        else:
-            response = " Please type 'proceed' or 'change' to continue."
 
-    elif session.stage == ChatStage.PAYMENT_LINK_SENT:
-        if "paid" in prompt.lower():
-            label_link = fedex_tool(session.order)
-            session.shipping_label = label_link
-            session.stage = ChatStage.SHIPPING_LABEL_SENT
-            response = f" Payment confirmed!  Here is your shipping label: [Track Shipment]({label_link})\n\nThank you for your order!"
-        else:
-            response = " Once you've paid, let me know by typing 'I have paid'."
-
-    elif session.stage == ChatStage.SHIPPING_LABEL_SENT:
-        response = " Your chai is on its way! Anything else I can help you with?"
-
-    else:
-        response = " I didn't quite catch that. Could you rephrase?"
-
-    st.chat_message("assistant").markdown(response)
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    # Save assistant message to session
+    # st.session_state.messages.append({"role": "assistant", "content": agent_response})
