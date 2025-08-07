@@ -5,3 +5,6 @@ openai
 python-dotenv
 requests
 paypal-agent-toolkit
+fastapi
+uvicorn
+stripe

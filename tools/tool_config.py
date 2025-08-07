@@ -9,7 +9,9 @@ from tools.calendar_tool import calendar_tool
 from tools.gmail_tool import gmail_tool
 from tools.calendar_tool import calendar_tool
 from tools.payment_tool import get_paypal_tools, order_tools
+
+from tools.apple_pay_tool import apple_pay_tools
 from tools.products_tool import products_tool
 
 def get_all_tools() -> list[Tool]:
-    return cart_tools + [create_invoice_tool, products_tool, fedex_tool, calendar_tool, gmail_tool] + order_tools + get_paypal_tools()
+    return cart_tools + [create_invoice_tool, products_tool, fedex_tool, calendar_tool, gmail_tool] + order_tools + get_paypal_tools() + apple_pay_tools
