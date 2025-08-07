@@ -87,9 +87,26 @@ def create_agent():
     6. Once confirmed, use a tool from the PayPal toolkit to generate a payment link for the order. Use order tools to keep track of order ID.
     7. Once the customer says that they have paid, use the order number to confirm that they have indeed done so. Output the details to the customer
     8. After the order is finalized using FinalizeOrder, use the 'create_fedex_shipment' from fedex_tool to create a shipment for the order and display the tracking number and label URL..    
-    9. If the customer was initially added as a guest, ask: "Would you like to save your profile for future orders?"
-         - If they say yes and is_guest is True, use rename_customer_tool to update the guest name to their real name.
-    """
+    9.If the customer was initially added as a guest, ask: "Would you like to save your profile for future orders?"
+        - If the customer says yes AND the variable is_guest is True:
+            1. Prompt the user to provide their full details including:
+                - First name
+                - Last name
+                - Phone number
+                - Email address
+                - Shipping address (street, city, state, postal code)
+
+            2. Once all details are received, use the rename_customer_tool with:
+                - customer_id
+                - new_name (first + last name)
+                - phone
+                - email
+                - address_line1
+                - city
+                - state
+                - postal_code
+
+            """
 
     prompt = ChatPromptTemplate.from_messages(
         [

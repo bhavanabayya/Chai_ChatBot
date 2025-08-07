@@ -136,16 +136,28 @@ class QuickBooksWrapper:
 
 
 
-    def rename_customer(self, customer_id: str, new_name: str):
-        # Check if the new name already exists to avoid duplication
+    def rename_customer(self, customer_id: str, new_name: str, phone: str = None, email: str = None, address: dict = None):
         if self.find_customer_by_name(new_name):
             raise Exception(f"Customer with name '{new_name}' already exists.")
 
-        # Fetch and update
+        # Fetch current customer record
         url = f"{self.base_url}/v3/company/{self.realm_id}/customer/{customer_id}?minorversion=75"
         existing = self._make_authenticated_request("GET", url).json()["Customer"]
 
+        # Update fields
         existing["DisplayName"] = new_name
+        existing["GivenName"] = new_name.split()[0]
+        existing["FamilyName"] = new_name.split()[-1]
+
+        if phone:
+            existing["PrimaryPhone"] = {"FreeFormNumber": phone}
+        if email:
+            existing["PrimaryEmailAddr"] = {"Address": email}
+        if address:
+            existing["BillAddr"] = address
+            existing["ShipAddr"] = address
+
+        # Submit update
         update_url = f"{self.base_url}/v3/company/{self.realm_id}/customer?minorversion=75"
         headers = {"Content-Type": "application/json"}
         response = self._make_authenticated_request("POST", update_url, json=existing, headers=headers)
@@ -154,6 +166,7 @@ class QuickBooksWrapper:
             return response.json()["Customer"]
         else:
             raise Exception(f"Error renaming customer: {response.status_code} - {response.text}")
+
 
         
     '''def create_customer(self, display_name):
