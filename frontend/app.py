@@ -10,13 +10,23 @@ import streamlit as st
 from backend.main import create_agent
 # from backend.chat_state import ChatState, ChatStage
 
+def extract_id_from_response(text: str) -> str:
+    import re
+    match = re.search(r"ID[:#]?\s*(\d+)", text)
+    return match.group(1) if match else None
+
+
 if "agent_executor" not in st.session_state:
     st.session_state.agent_executor = create_agent()
+
+if "customer_id" not in st.session_state:
+    st.session_state.customer_id = None
+
 
 # Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Hi! Welcome to Chai Corner! How can I help you today?"}
+        {"role": "assistant", "content": "Hi! Welcome to Chai Corner! May I know your name to get started?"}
     ]
 
 # if "chat_state" not in st.session_state:
@@ -41,8 +51,21 @@ if prompt := st.chat_input("What can I help you with today?"):
         with st.spinner("Thinking..."):
             try:
                 agent = st.session_state.agent_executor
-                response = agent.invoke({"input": prompt})
+                response = agent.invoke({
+                    "input": f"{prompt} | customer_id: {st.session_state.customer_id}"
+                })
+
+                # Extract customer_id from the agent response (if it exists)
+                if "ID:" in response:
+                    new_id = extract_id_from_response(response)
+                    if new_id:
+                        st.session_state.customer_id = new_id
+
+
                 agent_response = response.get("output", "Sorry, I ran into an issue.")
+                if "customer_id" in response:
+                    st.session_state.customer_id = response["customer_id"]
+                    print(f"✅ Stored customer_id: {st.session_state.customer_id}")
                 st.markdown(agent_response)
                 # Add agent's response to chat history
                 st.session_state.messages.append({"role": "assistant", "content": agent_response})

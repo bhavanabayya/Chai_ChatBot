@@ -100,3 +100,80 @@ class QuickBooksWrapper:
             return response.content  #  Return PDF bytes to stream via FastAPI
         else:
             raise Exception(f"PDF fetch failed: {response.status_code} - {response.text}")
+        
+    def find_customer_by_name(self, full_name: str):
+        url = f"{self.base_url}/v3/company/{self.realm_id}/query?minorversion=75"
+        query = f"SELECT * FROM Customer WHERE DisplayName = '{full_name}'"
+        response = self._make_authenticated_request("POST", url, data=query, headers={"Content-Type": "application/text"})
+
+        if response.status_code == 200:
+            customers = response.json().get("QueryResponse", {}).get("Customer", [])
+            return customers[0] if customers else None
+        else:
+            raise Exception(f"Error fetching customer: {response.status_code} - {response.text}")
+
+
+    def create_guest_customer(self, display_name: str = "Guest Customer"):
+        # First, check if a customer with this name already exists
+        existing = self.find_customer_by_name(display_name)
+        if existing:
+            return existing  # Return the existing guest customer
+
+        # If not found, create a new one
+        url = f"{self.base_url}/v3/company/{self.realm_id}/customer?minorversion=75"
+        payload = {
+            "DisplayName": display_name,
+            "GivenName": "Guest",
+            "FamilyName": "Customer"
+        }
+        headers = {"Content-Type": "application/json"}
+        response = self._make_authenticated_request("POST", url, json=payload, headers=headers)
+
+        if response.status_code == 200:
+            return response.json()["Customer"]
+        else:
+            raise Exception(f"Error creating guest: {response.status_code} - {response.text}")
+
+
+
+    def rename_customer(self, customer_id: str, new_name: str):
+        # Check if the new name already exists to avoid duplication
+        if self.find_customer_by_name(new_name):
+            raise Exception(f"Customer with name '{new_name}' already exists.")
+
+        # Fetch and update
+        url = f"{self.base_url}/v3/company/{self.realm_id}/customer/{customer_id}?minorversion=75"
+        existing = self._make_authenticated_request("GET", url).json()["Customer"]
+
+        existing["DisplayName"] = new_name
+        update_url = f"{self.base_url}/v3/company/{self.realm_id}/customer?minorversion=75"
+        headers = {"Content-Type": "application/json"}
+        response = self._make_authenticated_request("POST", update_url, json=existing, headers=headers)
+
+        if response.status_code == 200:
+            return response.json()["Customer"]
+        else:
+            raise Exception(f"Error renaming customer: {response.status_code} - {response.text}")
+
+        
+    '''def create_customer(self, display_name):
+        # Check if customer already exists
+        existing = self.find_customer_by_name(display_name)
+        if existing:
+            return existing
+
+        url = f"{self.base_url}/v3/company/{self.realm_id}/customer?minorversion=75"
+        body = {
+            "DisplayName": display_name,
+            "FullyQualifiedName": display_name
+        }
+        headers = {"Content-Type": "application/json"}
+
+        response = self._make_authenticated_request("POST", url, json=body, headers=headers)
+
+        if response.status_code == 200:
+            return response.json()["Customer"]
+        else:
+            raise Exception(f"QuickBooks Error: {response.status_code} - {response.text}")'''
+
+

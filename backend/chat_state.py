@@ -12,6 +12,7 @@ class ChatStage(Enum):
 class ChatState:
     def __init__(self):
         self.stage = ChatStage.GREETING
+        self.customer_id = None                     # 🔹 New field
         self.latest_order_text = ""
         self.latest_invoice_id = None
         self.summary_text = ""
@@ -22,6 +23,7 @@ class ChatState:
 
     def reset(self):
         self.stage = ChatStage.GREETING
+        self.customer_id = None                    # 🔹 Reset customer_id
         self.latest_order_text = ""
         self.latest_invoice_id = None
         self.summary_text = ""
@@ -32,6 +34,7 @@ class ChatState:
     def to_dict(self):
         return {
             "stage": self.stage.name,
+            "customer_id": self.customer_id,        # 🔹 Include in serialization
             "latest_order_text": self.latest_order_text,
             "latest_invoice_id": self.latest_invoice_id,
             "summary_text": self.summary_text,
@@ -45,6 +48,7 @@ class ChatState:
     def from_dict(cls, data):
         instance = cls()
         instance.stage = ChatStage[data.get("stage", "GREETING")]
+        instance.customer_id = data.get("customer_id")  # 🔹 Load from saved state
         instance.latest_order_text = data.get("latest_order_text", "")
         instance.latest_invoice_id = data.get("latest_invoice_id", None)
         instance.summary_text = data.get("summary_text", "")
