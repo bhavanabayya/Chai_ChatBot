@@ -20,31 +20,27 @@ class QuickBooksWrapper:
         self._load_tokens()
 
     def _load_tokens(self):
-        load_dotenv(dotenv_path=env_path)  # re-load updated values
-        self.access_token = os.getenv("QB_ACCESS_TOKEN")
-        self.refresh_token = os.getenv("QB_REFRESH_TOKEN")
+        try:
+            res = requests.get("http://localhost:8000/token")
+            if res.status_code != 200:
+                raise Exception("Failed to get token from service.")
+            data = res.json()
+            self.access_token = data["access_token"]
+            self.refresh_token = data["refresh_token"]
+        except Exception as e:
+            raise Exception(f"Token loading failed: {e}")
 
     def _refresh_access_token(self):
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-        data = {
-            "grant_type": "refresh_token",
-            "refresh_token": self.refresh_token
-        }
-        auth = HTTPBasicAuth(self.client_id, self.client_secret)
-        response = requests.post(self.token_url, headers=headers, data=data, auth=auth)
-
-        if response.status_code == 200:
-            tokens = response.json()
-            self.access_token = tokens["access_token"]
-            self.refresh_token = tokens.get("refresh_token", self.refresh_token)
-            self._save_tokens()
-            self._load_tokens()  # ensure tokens in memory are fresh
-            print(" QuickBooks tokens refreshed.")
-        else:
-            raise Exception(f"Failed to refresh token: {response.status_code} - {response.text}")
+        try:
+            res = requests.post("http://localhost:8000/token/refresh")
+            if res.status_code != 200:
+                raise Exception("Token refresh request failed.")
+            data = res.json()
+            self.access_token = data["access_token"]
+            self.refresh_token = data["refresh_token"]
+            print("🔁 Refreshed token from central service.")
+        except Exception as e:
+            raise Exception(f"Token refresh failed: {e}")
 
     def _save_tokens(self):
         with open(env_path, "r") as f:
@@ -64,8 +60,9 @@ class QuickBooksWrapper:
         headers["Authorization"] = f"Bearer {self.access_token}"
         headers.setdefault("Accept", "application/json")
         kwargs["headers"] = headers
+        response = requests.request(method, url, timeout=10, **kwargs)
 
-        response = requests.request(method, url, **kwargs)
+        # response = requests.request(method, url, **kwargs)
 
         # If token expired, refresh and retry once
         if response.status_code == 401:

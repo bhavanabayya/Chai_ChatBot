@@ -1,7 +1,17 @@
+# Core UI and App
 streamlit
+fastapi
+uvicorn
+
+# LangChain + OpenAI
 langchain
 langchain-openai
 openai
-python-dotenv
+
+# Tooling and HTTP
 requests
+python-dotenv
+
+# Payment
 paypal-agent-toolkit
+

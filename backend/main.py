@@ -1,21 +1,22 @@
 import os
 import sys
 import io
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
+import requests
+from pathlib import Path
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
+
 from langchain_openai import ChatOpenAI
 from langchain.agents import initialize_agent, AgentExecutor, create_tool_calling_agent
 from langchain.memory import ConversationBufferMemory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.tools import tool
-from tools.quickbooks_wrapper import QuickBooksWrapper
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
-from pathlib import Path
 
 from tools.tool_config import get_all_tools
+from tools.quickbooks.quickbooks_wrapper import QuickBooksWrapper
+from tools.fedex.fedex_api_wrapper import FedExWrapper 
 
+# Load environment variables
 env_path = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(dotenv_path=env_path)
 
@@ -28,7 +29,7 @@ app = FastAPI()
 # Initialize QuickBooks wrapper
 qb = QuickBooksWrapper()
 
-# Endpoint to download invoice PDF
+#  INVOICE PDF Download Endpoint
 @app.get("/download/invoice/{invoice_id}")
 def download_invoice(invoice_id: str):
     try:
@@ -39,34 +40,45 @@ def download_invoice(invoice_id: str):
     except Exception as e:
         return {"error": str(e)}
 
+#  FEDEX LABEL Download Endpoint (BONUS)
+@app.get("/download/label/{tracking_number}")
+def download_label(tracking_number: str):
+    """
+    Streams the FedEx label PDF given a tracking number.
+    This assumes the label URL is standard format.
+    """
+    try:
+        # You can enhance this to look up from saved label store if needed
+        label_url = f"https://www.fedex.com/label/{tracking_number}.pdf"  # or from DB if persisted
+        response = requests.get(label_url)
 
-# Create the Langchain Agent
+        if response.status_code != 200:
+            return {"error": f"Failed to fetch label: {response.status_code}"}
+
+        return StreamingResponse(io.BytesIO(response.content), media_type="application/pdf", headers={
+            "Content-Disposition": f"attachment; filename=label_{tracking_number}.pdf"
+        })
+    except Exception as e:
+        return {"error": str(e)}
+
+#  LangChain Agent Creation
 def create_agent():
     """
-    Creates and returns the Langchain agent executor.
-    This function should only be called ONCE per user session.
-    Its state (including memory) is maintained by Streamlit's session_state.
+    Creates and returns the LangChain agent executor.
     """
-    
-    # Get all the tools that are available for the agent to use:
     tools = get_all_tools()
-        
-    # Define the LLM to be used by the agent
-    # Keep temperature at 0 to keep responses to reduce randomness
-    # gpt-4o vs gpt-4-turbo: gpt-4o is faster and cheaper (twice as fast, half as expensive)
+
     llm = ChatOpenAI(
-        model = OPENAI_API_MODEL,
-        temperature = 0,
-        openai_api_key = OPENAI_API_KEY
+        model=OPENAI_API_MODEL,
+        temperature=0,
+        openai_api_key=OPENAI_API_KEY
     )
 
     memory = ConversationBufferMemory(
-        memory_key="chat_history", 
+        memory_key="chat_history",
         return_messages=True
     )
 
-    # Define the prompt. Outline behaviour and tools.
-    # TODO: Improve this. Correct tool names.
     SYSTEM_PROMPT = """
     You are a friendly and helpful AI assistant for an e-commerce business called Chai Corner.
     Your goal is to help customers find products, add them to a cart, and complete their purchase.
@@ -79,27 +91,21 @@ def create_agent():
     1. Greet the user and ask how you can help.
     2. If the user asks about products, use products_tool.
     3. Use the cart tools when user wants to add or remove items from their order, view cart and clear cart.
-    4. Generate an invoice and give the pdf to the customer for customer 58 using invoice_tool (Use the format: 'Generate 2 Madras Coffee and 1 Cardamom Chai for customer 58' to interface with the tool). Let the customer verify everything is correct.
-    5. Once confirmed, use a tool from the PayPal toolkit to generate a payment link for the order. Use order tools to keep track of order ID.
-    6. Once the customer says that they have paid, use the order number to confirm that they have indeed done so. Output the details to the customer
-    7. After the order is finalized using FinalizeOrder, use the 'create_fedex_shipment' from fedex_tool to create a shipment for the order and display the tracking number and label URL..    
+    4. Generate an invoice and give the pdf to the customer for customer 58 using invoice_tool.
+    5. Once confirmed, use a tool from the PayPal toolkit to generate a payment link for the order.
+    6. Once the customer says they have paid, finalize the order.
+    7. Then, use the FedEx shipment tool to generate a tracking number and label URL.    
     """
 
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", SYSTEM_PROMPT),
-            MessagesPlaceholder(variable_name="chat_history"),
-            ("human", "{input}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"), # This is where the agent's thought process will be injected
-        ]
-    )
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", SYSTEM_PROMPT),
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("human", "{input}"),
+        MessagesPlaceholder(variable_name="agent_scratchpad"),
+    ])
 
-    # Use models that natively output structured tool calls (JSON)
-    # More reliable evolution of the ReAct pattern
     agent = create_tool_calling_agent(llm, tools, prompt)
-    
 
-    # This is the runnable that will execute the agent's decisions.
     agent_executor = AgentExecutor(
         agent=agent, 
         tools=tools, 
