@@ -90,11 +90,6 @@ def create_agent():
          2. **[Pay with Apple Pay](Stripe_URL_from_generate_apple_pay_link)**
           Please confirm when you have completed the payment."
        
-       CRITICAL RULES:
-       - PayPal link comes from create_order tool (will be sandbox.paypal.com URL)
-       - Apple Pay link comes from generate_apple_pay_link tool (will be checkout.stripe.com URL)
-       - NEVER use create_order for Apple Pay - always use generate_apple_pay_link for Apple Pay
-       - The two links should have different domains (PayPal vs Stripe)
     6. When the customer says they have paid, automatically check BOTH payment methods:
        - FIRST: Try get_order_id and capture_order to check PayPal payment status
        - SECOND: Try get_apple_pay_session_status to check Apple Pay payment status
