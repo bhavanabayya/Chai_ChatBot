@@ -76,11 +76,15 @@ def create_agent():
     {{tools}}
 
     Follow this process:
-    1. Greet the user and ask how you can help.
-    2. If the user asks about products, use products_tool.
-    3. Use the cart tools when user wants to add or remove items from their order, view cart and clear cart.
-    4. Generate an invoice and give the pdf to the customer for customer 58 using invoice_tool (Use the format: 'Generate 2 Madras Coffee and 1 Cardamom Chai for customer 58' to interface with the tool). Let the customer verify everything is correct. WAIT for customer confirmation before proceeding to payment.
-    5. ONLY AFTER the customer confirms the invoice is correct and wants to proceed to payment, you MUST provide BOTH payment options:
+    1. Greet the user and ask for their full name (e.g., "John Doe").
+    2. Use the validate_customer_tool immediately to check if the customer exists using DisplayName in QuickBooks.
+         - If the customer exists, greet them with "Welcome back, [name]!" and continue.
+         - If the customer does not exist, ask “Would you like to continue as a guest?”
+                - If yes, create a guest profile using create_guest_tool and let them know: "Nice to meet you! We've created a guest profile for now."
+    3. If the user asks about products, use products_tool.
+    4. Use the cart tools when user wants to add or remove items from their order, view cart and clear cart.
+    5. Generate an invoice and give the pdf to the customer with corresponding customer_id using create_invoice_tool (Use the format: 'Generate 2 Madras Coffee and 1 Cardamom Chai for customer' to interface with the tool). Let the customer verify everything is correct.
+    6. ONLY AFTER the customer confirms the invoice is correct and wants to proceed to payment, you MUST provide BOTH payment options:
        - FIRST: Use get_products to get the correct prices, then calculate the total amount
        - SECOND: Use create_order tool to generate a PayPal payment link with the calculated total amount, then save_order_id to save the PayPal order ID
        - THIRD: Use generate_apple_pay_link tool to generate an Apple Pay (Stripe) payment link with the same calculated total amount
@@ -90,13 +94,32 @@ def create_agent():
          2. **[Pay with Apple Pay](Stripe_URL_from_generate_apple_pay_link)**
           Please confirm when you have completed the payment."
        
-    6. When the customer says they have paid, automatically check BOTH payment methods:
+    7. When the customer says they have paid, automatically check BOTH payment methods:
        - FIRST: Try get_order_id and capture_order to check PayPal payment status
        - SECOND: Try get_apple_pay_session_status to check Apple Pay payment status
        - Use whichever method shows a completed payment
        - Do NOT ask the user which payment method they used - detect it automatically
-    7. After the order is finalized using FinalizeOrder, use the 'create_fedex_shipment' from fedex_tool to create a shipment for the order and display the tracking number and label URL..    
-    """
+    8. After the order is finalized using FinalizeOrder, use the 'create_fedex_shipment' from fedex_tool to create a shipment for the order and display the tracking number and label URL..    
+    9.If the customer was initially added as a guest, ask: "Would you like to save your profile for future orders?"
+        - If the customer says yes AND the variable is_guest is True:
+            1. Prompt the user to provide their full details including:
+                - First name
+                - Last name
+                - Phone number
+                - Email address
+                - Shipping address (street, city, state, postal code)
+
+            2. Once all details are received, use the rename_customer_tool with:
+                - customer_id
+                - new_name (first + last name)
+                - phone
+                - email
+                - address_line1
+                - city
+                - state
+                - postal_code
+
+                """
 
     prompt = ChatPromptTemplate.from_messages(
         [
