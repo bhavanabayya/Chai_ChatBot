@@ -8,7 +8,6 @@ from pathlib import Path
 import streamlit as st
 
 from backend.main import create_agent
-# from backend.chat_state import ChatState, ChatStage
 
 if "agent_executor" not in st.session_state:
     st.session_state.agent_executor = create_agent()
@@ -18,9 +17,6 @@ if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "assistant", "content": "Hi! Welcome to Chai Corner! How can I help you today?"}
     ]
-
-# if "chat_state" not in st.session_state:
-#     st.session_state.chat_state = ChatState()
 
 st.title("Chai Corner Chatbot")
 
@@ -66,9 +62,3 @@ if prompt := st.chat_input("What can I help you with today?"):
                 error_message = f"An error occurred: {e}"
                 st.error(error_message)
                 st.session_state.messages.append({"role": "assistant", "content": error_message})
-
-            # st.markdown(agent_response)
-
-
-    # Save assistant message to session
-    # st.session_state.messages.append({"role": "assistant", "content": agent_response})
