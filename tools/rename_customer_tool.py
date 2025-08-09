@@ -1,11 +1,9 @@
-
 from langchain_core.tools import tool
 from pydantic import BaseModel
 from typing import Optional
 from tools.quickbooks_wrapper import QuickBooksWrapper
-import streamlit as st
 import json
-
+from backend.chat_state import set_customer  # ✅ centralized
 
 class RenameInput(BaseModel):
     customer_id: str
@@ -16,7 +14,6 @@ class RenameInput(BaseModel):
     city: Optional[str] = None
     state: Optional[str] = None
     postal_code: Optional[str] = None
-
 
 @tool(args_schema=RenameInput)
 def rename_customer_tool(
@@ -34,10 +31,7 @@ def rename_customer_tool(
     Returns JSON: {"status":"renamed","id":"...","name":"..."} on success.
     """
     if not customer_id or customer_id == "None":
-        return json.dumps({
-            "status": "error",
-            "message": "❌ Cannot rename: customer ID is missing or invalid."
-        })
+        return json.dumps({"status": "error", "message": "Cannot rename: customer ID is missing or invalid."})
 
     qb = QuickBooksWrapper()
 
@@ -52,17 +46,7 @@ def rename_customer_tool(
 
     try:
         updated = qb.rename_customer(customer_id, new_name, phone, email, address)
-        st.session_state["is_guest"] = False
-        st.session_state["customer_id"] = updated["Id"]
-
-        return json.dumps({
-            "status": "renamed",
-            "id": updated["Id"],
-            "name": updated["DisplayName"]
-        })
-
+        set_customer(updated["Id"], is_guest=False)  # ✅ promote centrally
+        return json.dumps({"status": "renamed", "id": updated["Id"], "name": updated["DisplayName"]})
     except Exception as e:
-        return json.dumps({
-            "status": "error",
-            "message": f"❌ Rename failed: {str(e)}"
-        })
+        return json.dumps({"status": "error", "message": f"Rename failed: {str(e)}"})

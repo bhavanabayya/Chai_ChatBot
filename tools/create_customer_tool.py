@@ -1,73 +1,50 @@
 # tools/create_customer_tool.py
-
 from langchain_core.tools import tool
-from pydantic import BaseModel, Field, EmailStr
-from typing import Optional
+from tools.quickbooks_wrapper import QuickBooksWrapper
 import streamlit as st
 import json
 
-from tools.quickbooks_wrapper import QuickBooksWrapper
-
-
-class CreateCustomerInput(BaseModel):
-    """Inputs for creating a full QuickBooks customer."""
-    first_name: str = Field(..., description="Customer first name")
-    last_name: str = Field(..., description="Customer last name")
-    phone: Optional[str] = Field(None, description="Phone number, e.g. 555-123-4567")
-    email: Optional[EmailStr] = Field(None, description="Email address")
-    address_line1: Optional[str] = Field(None, description="Street address line 1")
-    city: Optional[str] = Field(None, description="City")
-    state: Optional[str] = Field(None, description="State/Province code, e.g. CA")
-    postal_code: Optional[str] = Field(None, description="Postal/ZIP code")
-
-
-@tool(args_schema=CreateCustomerInput)
-def create_customer_tool(
-    first_name: str,
-    last_name: str,
-    phone: Optional[str] = None,
-    email: Optional[EmailStr] = None,
-    address_line1: Optional[str] = None,
-    city: Optional[str] = None,
-    state: Optional[str] = None,
-    postal_code: Optional[str] = None,
-) -> str:
+@tool
+def create_customer_tool(input: str) -> str:
     """
-    Creates a full (non-guest) customer in QuickBooks (or returns the existing one).
-    On success, sets Streamlit session_state:
-      - customer_id -> the customer's QuickBooks Id
-      - is_guest -> False
-    Returns a JSON string: {"status":"created|exists","id":"...","name":"..."}.
-    """
-    display_name = f"{first_name.strip()} {last_name.strip()}"
-
-    # Build address dict only if any address detail is provided
-    address = None
-    if any([address_line1, city, state, postal_code]):
-        address = {
-            "Line1": address_line1 or "",
-            "City": city or "",
-            "CountrySubDivisionCode": state or "",
-            "PostalCode": postal_code or "",
+    Creates a full (non-guest) customer in QuickBooks.
+    Expects JSON in input:
+      {
+        "display_name": "John Doe",
+        "phone": "555-1234",
+        "email": "john@example.com",
+        "address": {
+            "Line1": "123 Main St",
+            "City": "Los Angeles",
+            "CountrySubDivisionCode": "CA",
+            "PostalCode": "90001"
         }
+      }
+    """
+    try:
+        data = json.loads(input) if input.strip().startswith("{") else {}
+    except Exception:
+        return json.dumps({"status": "error", "message": "Invalid JSON for create_customer_tool"})
+
+    display_name = data.get("display_name")
+    phone = data.get("phone")
+    email = data.get("email")
+    address = data.get("address")
+
+    if not display_name:
+        return json.dumps({"status": "error", "message": "display_name is required"})
 
     qb = QuickBooksWrapper()
-
-    # Check if already exists to label status correctly
-    existing = qb.find_customer_by_name(display_name)
-    if existing:
-        st.session_state["customer_id"] = existing["Id"]
+    try:
+        customer = qb.create_customer(display_name, phone, email, address)
+        # ✅ Critical: promote to real customer
+        st.session_state["customer_id"] = customer["Id"]
         st.session_state["is_guest"] = False
-        return json.dumps({"status": "exists", "id": existing["Id"], "name": display_name})
 
-    # Create new customer with optional fields
-    created = qb.create_customer(
-        display_name=display_name,
-        phone=phone,
-        email=str(email) if email else None,
-        address=address,
-    )
-
-    st.session_state["customer_id"] = created["Id"]
-    st.session_state["is_guest"] = False
-    return json.dumps({"status": "created", "id": created["Id"], "name": display_name})
+        return json.dumps({
+            "status": "created",
+            "id": customer["Id"],
+            "name": customer.get("DisplayName", display_name)
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})

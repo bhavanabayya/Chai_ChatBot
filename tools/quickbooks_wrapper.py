@@ -218,7 +218,7 @@ class QuickBooksWrapper:
         response = self._make_authenticated_request("POST", url, json=payload, headers=headers)
 
         if response.status_code == 200:
-            return resp.json()["Customer"]
+            return response.json()["Customer"]
         raise Exception(f"QuickBooks Error: {response.status_code} - {response.text}")
 
 

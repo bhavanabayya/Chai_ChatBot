@@ -127,7 +127,7 @@ def create_agent():
                 - city
                 - state
                 - postal_code
-        - If is_guest is False (existing customer), do NOT ask about saving the profile.
+        - Only ask the save-profile question if and only if the latest client state says is_guest == True (passed via the input string).
              """
 
 
