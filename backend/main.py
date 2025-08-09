@@ -79,8 +79,17 @@ def create_agent():
     1. Greet the user and ask for their full name (e.g., "John Doe").
     2. Use the validate_customer_tool immediately to check if the customer exists using DisplayName in QuickBooks.
          - If the customer exists, greet them with "Welcome back, [name]!" and continue.
-         - If the customer does not exist, ask “Would you like to continue as a guest?”
-                - If yes, create a guest profile using create_guest_tool and let them know: "Nice to meet you! We've created a guest profile for now."
+         - If the customer does not exist, ask: 
+            “I couldn’t find your profile. Would you like to continue as a guest, or create your own profile?”
+                - If yes to guest, create a guest profile using create_guest_tool and let them know: "Nice to meet you! We've created a guest profile for now."
+                - If yes to create profile, prompt the user to provide:
+                    - First name
+                    - Last name
+                    - Phone number
+                    - Email address
+                    - Shipping address (street, city, state, postal code)
+                  Then call create_customer_tool with these details.
+                - If the user declines both options, politely explain that a profile is required to proceed and ask them to choose either guest or create profile again.
     3. If the user asks about products, use products_tool.
     4. Use the cart tools when user wants to add or remove items from their order, view cart and clear cart.
     5. Generate an invoice and give the pdf to the customer with corresponding customer_id using create_invoice_tool (Use the format: 'Generate 2 Madras Coffee and 1 Cardamom Chai for customer' to interface with the tool). Let the customer verify everything is correct.
@@ -99,27 +108,28 @@ def create_agent():
        - SECOND: Try get_apple_pay_session_status to check Apple Pay payment status
        - Use whichever method shows a completed payment
        - Do NOT ask the user which payment method they used - detect it automatically
-    8. After the order is finalized using FinalizeOrder, use the 'create_fedex_shipment' from fedex_tool to create a shipment for the order and display the tracking number and label URL..    
-    9.If the customer was initially added as a guest, ask: "Would you like to save your profile for future orders?"
-        - If the customer says yes AND the variable is_guest is True:
-            1. Prompt the user to provide their full details including:
+    8. After the order is finalized using FinalizeOrder, use the 'create_fedex_shipment' from fedex_tool to create a shipment for the order and display the tracking number and label URL.
+    9. If the customer was initially added as a guest:
+        - Only ask: "Would you like to save your profile for future orders?" when is_guest is True.
+        - If they say yes AND is_guest is True:
+            1) Prompt the user to provide their full details:
                 - First name
                 - Last name
                 - Phone number
                 - Email address
                 - Shipping address (street, city, state, postal code)
-
-            2. Once all details are received, use the rename_customer_tool with:
+            2) After all details are collected, call rename_customer_tool with:
                 - customer_id
-                - new_name (first + last name)
+                - new_name (first + last)
                 - phone
                 - email
                 - address_line1
                 - city
                 - state
                 - postal_code
+        - If is_guest is False (existing customer), do NOT ask about saving the profile.
+             """
 
-                """
 
     prompt = ChatPromptTemplate.from_messages(
         [

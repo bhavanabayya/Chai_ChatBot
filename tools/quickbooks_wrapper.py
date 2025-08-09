@@ -169,24 +169,56 @@ class QuickBooksWrapper:
 
 
         
-    '''def create_customer(self, display_name):
-        # Check if customer already exists
+    def create_customer(
+        self,
+        display_name: str,
+        phone: str | None = None,
+        email: str | None = None,
+        address: dict | None = None,
+    ):
+        """
+        Creates a full (non-guest) customer. If a customer with the same DisplayName exists,
+        returns the existing customer instead of creating a duplicate.
+
+        address format example:
+        {
+        "Line1": "123 Main St",
+        "City": "Los Angeles",
+        "CountrySubDivisionCode": "CA",
+        "PostalCode": "90001"
+        }
+        """
+        display_name = (display_name or "").strip()
+        if not display_name:
+            raise ValueError("display_name is required")
+
+        # De-dupe by DisplayName
         existing = self.find_customer_by_name(display_name)
         if existing:
             return existing
 
-        url = f"{self.base_url}/v3/company/{self.realm_id}/customer?minorversion=75"
-        body = {
+        payload = {
             "DisplayName": display_name,
-            "FullyQualifiedName": display_name
+            "FullyQualifiedName": display_name,
+            # Optional but nice if you split names before calling this:
+            "GivenName": display_name.split()[0],
+            "FamilyName": display_name.split()[-1],
         }
-        headers = {"Content-Type": "application/json"}
 
-        response = self._make_authenticated_request("POST", url, json=body, headers=headers)
+        if phone:
+            payload["PrimaryPhone"] = {"FreeFormNumber": phone}
+        if email:
+            payload["PrimaryEmailAddr"] = {"Address": email}
+        if address:
+            payload["BillAddr"] = address
+            payload["ShipAddr"] = address
+
+        url = f"{self.base_url}/v3/company/{self.realm_id}/customer?minorversion=75"
+        headers = {"Content-Type": "application/json"}
+        response = self._make_authenticated_request("POST", url, json=payload, headers=headers)
 
         if response.status_code == 200:
-            return response.json()["Customer"]
-        else:
-            raise Exception(f"QuickBooks Error: {response.status_code} - {response.text}")'''
+            return resp.json()["Customer"]
+        raise Exception(f"QuickBooks Error: {response.status_code} - {response.text}")
 
 

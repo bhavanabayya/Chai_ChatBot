@@ -1,23 +1,24 @@
 from langchain_core.tools import tool
 from tools.quickbooks_wrapper import QuickBooksWrapper
 import streamlit as st
+import json
 
 @tool
 def validate_customer_tool(input: str) -> str:
     """
-    Checks if customer exists by name. Does NOT create a guest. Sets customer_id if found.
+    Checks if customer exists by name. Does NOT create a guest. 
+    Sets session_state.customer_id / is_guest for the UI.
+    Returns a JSON string: {"status": "found"|"not_found", "name": str, "id": str|None}
     """
-    if "| customer_id:" in input:
-        user_input, _ = input.split("| customer_id:")
-    else:
-        user_input = input.strip()
+    name = input.split("| customer_id:")[0].strip() if "| customer_id:" in input else input.strip()
 
     qb = QuickBooksWrapper()
-    customer = qb.find_customer_by_name(user_input.strip())
+    customer = qb.find_customer_by_name(name)
 
     if customer:
         st.session_state["customer_id"] = customer["Id"]
         st.session_state["is_guest"] = False
-        return f"Customer exists: {customer['DisplayName']} (ID: {customer['Id']})"
+        return json.dumps({"status": "found", "name": customer["DisplayName"], "id": customer["Id"]})
     else:
-        return "No customer found. You can create a guest profile if you'd like to proceed."
+        # do NOT create guest here
+        return json.dumps({"status": "not_found", "name": name, "id": None})

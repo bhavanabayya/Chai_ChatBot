@@ -22,6 +22,8 @@ if "agent_executor" not in st.session_state:
 if "customer_id" not in st.session_state:
     st.session_state.customer_id = None
 
+if "is_guest" not in st.session_state:
+    st.session_state.is_guest = False
 
 # Initialize session state
 if "messages" not in st.session_state:
@@ -52,8 +54,9 @@ if prompt := st.chat_input("What can I help you with today?"):
             try:
                 agent = st.session_state.agent_executor
                 response = agent.invoke({
-                    "input": f"{prompt} | customer_id: {st.session_state.customer_id}"
+                    "input": f"{prompt} | customer_id: {st.session_state.customer_id} | is_guest: {st.session_state.is_guest}"
                 })
+
 
                 # Extract customer_id from the agent response (if it exists)
                 if "ID:" in response:
