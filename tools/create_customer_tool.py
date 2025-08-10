@@ -47,15 +47,14 @@ def create_customer_tool(input: str) -> str:
         qb_id = customer["Id"]
         qb_name = customer.get("DisplayName", display_name)
 
-        # Heuristic: QuickBooksWrapper.create_customer returns existing if name already exists.
-        # We can mark this as "exists" when the returned DisplayName matches request.
-        status = "exists" if qb_name.lower() == display_name.lower() else "created"
-
         # ✅ Update centralized state (also ensures is_guest=False)
         set_customer(qb_id, is_guest=False)
 
+        # Always return "created" status since this tool is only called when creating new customers
+        # The QuickBooks wrapper handles deduplication internally, but from the agent's perspective,
+        # this tool should only be called for new customer creation
         return json.dumps({
-            "status": status,
+            "status": "created",
             "id": qb_id,
             "name": qb_name
         })

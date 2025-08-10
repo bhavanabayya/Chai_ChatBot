@@ -110,9 +110,9 @@ def create_agent():
        - If Apple Pay shows "complete" and "paid" status, use create_fedex_shipment and respond with: "✅ Payment received via Apple Pay! 📦 Shipment has been successfully created! Here are the details:"
        - NEVER guess or assume the payment method - ALWAYS use the tools
        - MANDATORY: Use the actual tool results to determine payment method, not memory or assumptions
-    9. If the customer was initially added as a guest:
-        - Only ask: "Would you like to save your profile for future orders?" when is_guest is True.
-        - If they say yes AND is_guest is True:
+    9. Do not forget to ask if and only if the customer was initially added as a guest:
+        - Only ask: "Would you like to save your profile for future orders?" 
+        - If they say yes:
             1) Prompt the user to provide their full details:
                 - First name
                 - Last name
