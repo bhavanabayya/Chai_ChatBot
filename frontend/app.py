@@ -4,6 +4,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import re
 import logging
+import time
 from pathlib import Path
 import streamlit as st
 
@@ -15,6 +16,23 @@ def extract_id_from_response(text: str) -> str:
     match = re.search(r"ID[:#]?\s*(\d+)", text)
     return match.group(1) if match else None
 
+def extract_payment_ids(text: str):
+    """Extract PayPal order ID and Apple Pay session ID from agent response"""
+    paypal_id = None
+    apple_pay_id = None
+    
+    # Extract PayPal order ID from the URL
+    paypal_match = re.search(r'paypal\.com/checkoutnow\?token=([A-Z0-9]+)', text)
+    if paypal_match:
+        paypal_id = paypal_match.group(1)
+    
+    # Extract Apple Pay session ID from the URL
+    apple_pay_match = re.search(r'checkout\.stripe\.com/c/pay/(cs_test_[A-Za-z0-9]+)', text)
+    if apple_pay_match:
+        apple_pay_id = apple_pay_match.group(1)
+    
+    return paypal_id, apple_pay_id
+
 
 if "agent_executor" not in st.session_state:
     st.session_state.agent_executor = create_agent()
@@ -24,6 +42,19 @@ if "customer_id" not in st.session_state:
 
 if "is_guest" not in st.session_state:
     st.session_state.is_guest = False
+
+# Payment monitoring variables
+if "payment_polling" not in st.session_state:
+    st.session_state.payment_polling = False
+
+if "last_payment_check" not in st.session_state:
+    st.session_state.last_payment_check = 0
+
+if "paypal_order_id" not in st.session_state:
+    st.session_state.paypal_order_id = None
+
+if "apple_pay_session_id" not in st.session_state:
+    st.session_state.apple_pay_session_id = None
 
 # Initialize session state
 if "messages" not in st.session_state:
@@ -69,6 +100,18 @@ if prompt := st.chat_input("What can I help you with today?"):
                 if "customer_id" in response:
                     st.session_state.customer_id = response["customer_id"]
                     print(f"✅ Stored customer_id: {st.session_state.customer_id}")
+                
+                # Start payment monitoring if payment links are detected
+                if "Pay with PayPal" in agent_response and "Pay with Apple Pay" in agent_response:
+                    # Extract and save payment IDs
+                    paypal_id, apple_pay_id = extract_payment_ids(agent_response)
+                    st.session_state.paypal_order_id = paypal_id
+                    st.session_state.apple_pay_session_id = apple_pay_id
+
+                    st.session_state.payment_polling = True
+                    st.session_state.last_payment_check = time.time()
+                    print(f"🔄 Started payment monitoring - PayPal: {paypal_id}, Apple Pay: {apple_pay_id}")
+                
                 st.markdown(agent_response)
                 # Add agent's response to chat history
                 st.session_state.messages.append({"role": "assistant", "content": agent_response})
@@ -96,5 +139,49 @@ if prompt := st.chat_input("What can I help you with today?"):
             # st.markdown(agent_response)
 
 
-    # Save assistant message to session
-    # st.session_state.messages.append({"role": "assistant", "content": agent_response})
+# --- Payment Status Monitoring ---
+# Check payment status automatically when polling is active
+if st.session_state.payment_polling:
+    current_time = time.time()
+    if current_time - st.session_state.last_payment_check >= 10:  # Check every 10 seconds (less frequent)
+        st.session_state.last_payment_check = current_time
+        
+        try:
+            # Check payment status silently - only respond when truly completed
+            agent = st.session_state.agent_executor
+            paypal_id = st.session_state.paypal_order_id
+            apple_pay_id = st.session_state.apple_pay_session_id
+
+            # Use a more specific input that only checks for completed payments
+            check_input = f"Silently check if payment is completed for paypal_order_id: {paypal_id} or apple_pay_session_id: {apple_pay_id}. Only respond if payment is FULLY COMPLETED and PAID, otherwise say 'still waiting'"
+
+            response = agent.invoke({
+                "input": check_input
+            })
+
+            payment_response = response.get("output", "")
+
+            # Only respond if payment is truly completed (not just initiated or pending)
+            if any(keyword in payment_response.lower() for keyword in
+                   ["payment received via paypal", "payment received via apple pay", "order has been confirmed", "shipment has been successfully created", "tracking number", "successfully processed", "payment successful"]) and "still waiting" not in payment_response.lower():
+                # Payment successful - stop polling and show message
+                st.session_state.payment_polling = False
+                with st.chat_message("assistant"):
+                    st.markdown(payment_response)
+                st.session_state.messages.append({"role": "assistant", "content": payment_response})
+                st.rerun()
+
+        except Exception as e:
+            print(f"Payment monitoring error: {e}")
+    
+    # Auto-refresh every 5 seconds when monitoring (less frequent)
+    time.sleep(5)
+    st.rerun()
+
+# --- Payment Status Indicator ---
+if st.session_state.payment_polling:
+    st.sidebar.markdown("🔄 **Monitoring Payment Status...**")
+    st.sidebar.markdown("The system is automatically checking for payment completion.")
+    if st.sidebar.button("Stop Monitoring"):
+        st.session_state.payment_polling = False
+        st.rerun()

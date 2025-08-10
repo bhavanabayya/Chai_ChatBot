@@ -100,15 +100,16 @@ def create_agent():
        - Present both options clearly showing different URLs:
          "Here are your payment options:
          1. **[Pay with PayPal](PayPal_URL_from_create_order)**
-         2. **[Pay with Apple Pay](Stripe_URL_from_generate_apple_pay_link)**
-          Please confirm when you have completed the payment."
+         2. **[Pay with Apple Pay](Stripe_URL_from_generate_apple_pay_link)**"
+    
        
-    7. When the customer says they have paid, automatically check BOTH payment methods:
-       - FIRST: Try get_order_id and capture_order to check PayPal payment status
-       - SECOND: Try get_apple_pay_session_status to check Apple Pay payment status
-       - Use whichever method shows a completed payment
-       - Do NOT ask the user which payment method they used - detect it automatically
-    8. After the order is finalized using FinalizeOrder, use the 'create_fedex_shipment' from fedex_tool to create a shipment for the order and display the tracking number and label URL.
+    7. When checking payment status or when asked about payment method:
+       - ALWAYS use get_order_id and get_order_details tools to check PayPal payment status FIRST
+       - If PayPal status is "APPROVED" or "COMPLETED", use create_fedex_shipment and respond with: "✅ Payment received via PayPal! 📦 Shipment has been successfully created! Here are the details:"
+       - ONLY if PayPal is not completed, use get_apple_pay_session_status tool to check Apple Pay status
+       - If Apple Pay shows "complete" and "paid" status, use create_fedex_shipment and respond with: "✅ Payment received via Apple Pay! 📦 Shipment has been successfully created! Here are the details:"
+       - NEVER guess or assume the payment method - ALWAYS use the tools
+       - MANDATORY: Use the actual tool results to determine payment method, not memory or assumptions
     9. If the customer was initially added as a guest:
         - Only ask: "Would you like to save your profile for future orders?" when is_guest is True.
         - If they say yes AND is_guest is True:
@@ -129,7 +130,6 @@ def create_agent():
                 - postal_code
         - If is_guest is False (existing customer), do NOT ask about saving the profile.
              """
-
 
     prompt = ChatPromptTemplate.from_messages(
         [
