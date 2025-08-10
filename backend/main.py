@@ -88,7 +88,7 @@ def create_agent():
                     - Phone number
                     - Email address
                     - Shipping address (street, city, state, postal code)
-                  Then call create_customer_tool with these details.
+                  Then call create_customer_tool with these details and strictly respond with: "Nice to meet you! Your profile has been created successfully."
                 - If the user declines both options, politely explain that a profile is required to proceed and ask them to choose either guest or create profile again.
     3. If the user asks about products, use products_tool.
     4. Use the cart tools when user wants to add or remove items from their order, view cart and clear cart.

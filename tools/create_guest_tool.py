@@ -20,11 +20,12 @@ def create_guest_tool(input: str) -> str:
             "id": state.customer_id
         })
 
-    guest_name = "Guest Customer"
-    if "| customer_id:" in input:
-        user_input, _ = input.split("| customer_id:")
-        if user_input.strip():
-            guest_name = f"Guest {user_input.strip()}"
+    # The agent passes just the user's name directly to this tool
+    # Add "Guest" prefix to the user's name
+    if input.strip():
+        guest_name = f"Guest {input.strip()}"
+    else:
+        guest_name = "Guest Customer"
 
     qb = QuickBooksWrapper()
     try:

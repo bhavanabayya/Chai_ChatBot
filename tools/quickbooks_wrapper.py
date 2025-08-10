@@ -114,17 +114,17 @@ class QuickBooksWrapper:
 
 
     def create_guest_customer(self, display_name: str = "Guest Customer"):
-        # First, check if a customer with this name already exists
+        # First, check if a customer with this exact name already exists
         existing = self.find_customer_by_name(display_name)
         if existing:
-            return existing  # Return the existing guest customer
+            return existing  # Return the existing customer with same name
 
-        # If not found, create a new one
+        # If not found, create a new one with new customer ID
         url = f"{self.base_url}/v3/company/{self.realm_id}/customer?minorversion=75"
         payload = {
             "DisplayName": display_name,
-            "GivenName": "Guest",
-            "FamilyName": "Customer"
+            "GivenName": display_name.split()[0] if display_name.split() else "Guest",
+            "FamilyName": display_name.split()[-1] if len(display_name.split()) > 1 else "Customer"
         }
         headers = {"Content-Type": "application/json"}
         response = self._make_authenticated_request("POST", url, json=payload, headers=headers)
