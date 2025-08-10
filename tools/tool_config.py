@@ -15,6 +15,7 @@ from tools.products_tool import products_tool
 from tools.validate_customer_tool import validate_customer_tool
 from tools.create_guest_tool import create_guest_tool
 from tools.rename_customer_tool import rename_customer_tool
+from tools.create_customer_tool import create_customer_tool
 
 def get_all_tools() -> list[Tool]:
-    return cart_tools + [create_invoice_tool,  validate_customer_tool, create_guest_tool, rename_customer_tool, products_tool, fedex_tool, calendar_tool, gmail_tool] + order_tools + get_paypal_tools() + apple_pay_tools
+    return cart_tools + [create_invoice_tool,  validate_customer_tool, create_customer_tool, create_guest_tool, rename_customer_tool, products_tool, fedex_tool, calendar_tool, gmail_tool] + order_tools + get_paypal_tools()+ apple_pay_tools

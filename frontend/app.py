@@ -9,7 +9,7 @@ from pathlib import Path
 import streamlit as st
 
 from backend.main import create_agent
-# from backend.chat_state import ChatState, ChatStage
+from backend.chat_state import get_state, set_customer  # ✅ use centralized state
 
 def extract_id_from_response(text: str) -> str:
     import re
@@ -32,7 +32,6 @@ def extract_payment_ids(text: str):
         apple_pay_id = apple_pay_match.group(1)
     
     return paypal_id, apple_pay_id
-
 
 if "agent_executor" not in st.session_state:
     st.session_state.agent_executor = create_agent()
@@ -62,20 +61,13 @@ if "messages" not in st.session_state:
         {"role": "assistant", "content": "Hi! Welcome to Chai Corner! May I know your name to get started?"}
     ]
 
-# if "chat_state" not in st.session_state:
-#     st.session_state.chat_state = ChatState()
-
 st.title("Chai Corner Chatbot")
 
-# --- Display Chat Messages ---
-# Iterate through the messages stored in session_state and display them.
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# --- Handle User Input ---
 if prompt := st.chat_input("What can I help you with today?"):
-    # Add and display user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -84,17 +76,16 @@ if prompt := st.chat_input("What can I help you with today?"):
         with st.spinner("Thinking..."):
             try:
                 agent = st.session_state.agent_executor
+                state = get_state()  # ✅ centralized
                 response = agent.invoke({
-                    "input": f"{prompt} | customer_id: {st.session_state.customer_id} | is_guest: {st.session_state.is_guest}"
+                    "input": f"{prompt} | customer_id: {state.customer_id} | is_guest: {state.is_guest}"
                 })
 
-
-                # Extract customer_id from the agent response (if it exists)
-                if "ID:" in response:
-                    new_id = extract_id_from_response(response)
-                    if new_id:
-                        st.session_state.customer_id = new_id
-
+                # Fallback: try to capture a raw ID pattern
+                raw_text = response if isinstance(response, str) else response.get("output", "")
+                new_id = extract_id_from_response(raw_text)
+                if new_id:
+                    set_customer(new_id)  # ✅ centralized
 
                 agent_response = response.get("output", "Sorry, I ran into an issue.")
                 if "customer_id" in response:
@@ -113,10 +104,8 @@ if prompt := st.chat_input("What can I help you with today?"):
                     print(f"🔄 Started payment monitoring - PayPal: {paypal_id}, Apple Pay: {apple_pay_id}")
                 
                 st.markdown(agent_response)
-                # Add agent's response to chat history
                 st.session_state.messages.append({"role": "assistant", "content": agent_response})
 
-                #  Show download button if invoice is generated
                 if "Download Invoice" in agent_response:
                     match = re.search(r"/download/(invoice_\d+\.pdf)", agent_response)
                     if match:
@@ -130,7 +119,6 @@ if prompt := st.chat_input("What can I help you with today?"):
                                     file_name=match.group(1),
                                     mime="application/pdf"
                                 )
-                                
             except Exception as e:
                 error_message = f"An error occurred: {e}"
                 st.error(error_message)

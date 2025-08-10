@@ -8,3 +8,5 @@ paypal-agent-toolkit
 fastapi
 uvicorn
 stripe
+pydantic
+pydantic[email]

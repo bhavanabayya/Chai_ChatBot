@@ -1,73 +1,64 @@
 # tools/create_customer_tool.py
-
 from langchain_core.tools import tool
-from pydantic import BaseModel, Field, EmailStr
-from typing import Optional
-import streamlit as st
+from tools.quickbooks_wrapper import QuickBooksWrapper
+from backend.chat_state import set_customer  # ✅ central source of truth
 import json
 
-from tools.quickbooks_wrapper import QuickBooksWrapper
-
-
-class CreateCustomerInput(BaseModel):
-    """Inputs for creating a full QuickBooks customer."""
-    first_name: str = Field(..., description="Customer first name")
-    last_name: str = Field(..., description="Customer last name")
-    phone: Optional[str] = Field(None, description="Phone number, e.g. 555-123-4567")
-    email: Optional[EmailStr] = Field(None, description="Email address")
-    address_line1: Optional[str] = Field(None, description="Street address line 1")
-    city: Optional[str] = Field(None, description="City")
-    state: Optional[str] = Field(None, description="State/Province code, e.g. CA")
-    postal_code: Optional[str] = Field(None, description="Postal/ZIP code")
-
-
-@tool(args_schema=CreateCustomerInput)
-def create_customer_tool(
-    first_name: str,
-    last_name: str,
-    phone: Optional[str] = None,
-    email: Optional[EmailStr] = None,
-    address_line1: Optional[str] = None,
-    city: Optional[str] = None,
-    state: Optional[str] = None,
-    postal_code: Optional[str] = None,
-) -> str:
+@tool
+def create_customer_tool(input: str) -> str:
     """
-    Creates a full (non-guest) customer in QuickBooks (or returns the existing one).
-    On success, sets Streamlit session_state:
-      - customer_id -> the customer's QuickBooks Id
-      - is_guest -> False
-    Returns a JSON string: {"status":"created|exists","id":"...","name":"..."}.
+    Creates (or fetches) a full, non-guest customer in QuickBooks and updates app state.
+
+    Expected input (JSON string):
+    {
+      "display_name": "John Doe",                 # required
+      "phone": "555-1234",                        # optional
+      "email": "john@example.com",                # optional
+      "address": {                                # optional
+        "Line1": "123 Main St",
+        "City": "Los Angeles",
+        "CountrySubDivisionCode": "CA",
+        "PostalCode": "90001"
+      }
+    }
+
+    Returns (JSON string):
+      {"status":"created"|"exists","id":"<QB Id>","name":"<DisplayName>"}
+      or {"status":"error","message":"..."}
     """
-    display_name = f"{first_name.strip()} {last_name.strip()}"
+    # --- Parse input ---
+    try:
+        data = json.loads(input) if input and input.strip().startswith("{") else {}
+    except Exception:
+        return json.dumps({"status": "error", "message": "Invalid JSON for create_customer_tool"})
 
-    # Build address dict only if any address detail is provided
-    address = None
-    if any([address_line1, city, state, postal_code]):
-        address = {
-            "Line1": address_line1 or "",
-            "City": city or "",
-            "CountrySubDivisionCode": state or "",
-            "PostalCode": postal_code or "",
-        }
+    display_name = (data.get("display_name") or "").strip()
+    phone = data.get("phone")
+    email = data.get("email")
+    address = data.get("address")
 
+    if not display_name:
+        return json.dumps({"status": "error", "message": "display_name is required"})
+
+    # --- Create or fetch customer ---
     qb = QuickBooksWrapper()
+    try:
+        customer = qb.create_customer(display_name, phone, email, address)
+        qb_id = customer["Id"]
+        qb_name = customer.get("DisplayName", display_name)
 
-    # Check if already exists to label status correctly
-    existing = qb.find_customer_by_name(display_name)
-    if existing:
-        st.session_state["customer_id"] = existing["Id"]
-        st.session_state["is_guest"] = False
-        return json.dumps({"status": "exists", "id": existing["Id"], "name": display_name})
+        # Heuristic: QuickBooksWrapper.create_customer returns existing if name already exists.
+        # We can mark this as "exists" when the returned DisplayName matches request.
+        status = "exists" if qb_name.lower() == display_name.lower() else "created"
 
-    # Create new customer with optional fields
-    created = qb.create_customer(
-        display_name=display_name,
-        phone=phone,
-        email=str(email) if email else None,
-        address=address,
-    )
+        # ✅ Update centralized state (also ensures is_guest=False)
+        set_customer(qb_id, is_guest=False)
 
-    st.session_state["customer_id"] = created["Id"]
-    st.session_state["is_guest"] = False
-    return json.dumps({"status": "created", "id": created["Id"], "name": display_name})
+        return json.dumps({
+            "status": status,
+            "id": qb_id,
+            "name": qb_name
+        })
+
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
