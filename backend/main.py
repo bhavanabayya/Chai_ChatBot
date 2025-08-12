@@ -1,20 +1,35 @@
 import os
 import sys
 import io
+from pydantic import BaseModel
 import requests
 from pathlib import Path
-from fastapi import FastAPI
+from functools import partial
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from langchain_openai import ChatOpenAI
-from langchain.agents import initialize_agent, AgentExecutor, create_tool_calling_agent
+from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.memory import ConversationBufferMemory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.tools import Tool
 
+from typing import List
 from tools.tool_config import get_all_tools
 from tools.quickbooks.quickbooks_wrapper import QuickBooksWrapper
-from tools.fedex.fedex_api_wrapper import FedExWrapper 
+
+from tools.cart.cart_tool import (
+    get_cart_for_session,
+    add_to_cart,
+    remove_from_cart,
+    view_cart,
+    clear_cart
+)
+
+# --- Environment and App Setup ---
 
 # Load environment variables
 env_path = Path(__file__).resolve().parents[1] / ".env"
@@ -26,10 +41,26 @@ OPENAI_API_MODEL = os.getenv("OPENAI_API_MODEL")
 # Initialize FastAPI app
 app = FastAPI()
 
+# Define allowed origins for CORS
+# Your React/TypeScript frontend will likely be on localhost:3000
+origins = [
+    "http://localhost:8080",
+    # "http://localhost:5173", # Common for Vite projects
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- PDF Download Endpoints ---
+
 # Initialize QuickBooks wrapper
 qb = QuickBooksWrapper()
 
-#  INVOICE PDF Download Endpoint
 @app.get("/download/invoice/{invoice_id}")
 def download_invoice(invoice_id: str):
     try:
@@ -40,31 +71,60 @@ def download_invoice(invoice_id: str):
     except Exception as e:
         return {"error": str(e)}
 
-#  FEDEX LABEL Download Endpoint (BONUS)
-@app.get("/download/label/{tracking_number}")
-def download_label(tracking_number: str):
-    """
-    Streams the FedEx label PDF given a tracking number.
-    This assumes the label URL is standard format.
-    """
-    try:
-        # You can enhance this to look up from saved label store if needed
-        label_url = f"https://www.fedex.com/label/{tracking_number}.pdf"  # or from DB if persisted
-        response = requests.get(label_url)
+# --- Cart Tool Creation ---
+# def get_session_specific_cart_tools(session_id: str) -> list:
+#     """Creates tool instances that are bound to a specific session's cart."""
+#     # Get the specific cart for this session
+#     cart = get_cart_for_session(session_id)
 
-        if response.status_code != 200:
-            return {"error": f"Failed to fetch label: {response.status_code}"}
+#     # Create a list of Tool objects, using partial to bind the session's cart
+#     # to the first argument of each cart function.
+#     session_tools = [
+#         Tool(
+#             name="add_to_cart",
+#             func=partial(add_to_cart, cart),
+#             description="Adds a specified quantity of an item to the shopping cart."
+#         ),
+#         Tool(
+#             name="remove_from_cart",
+#             func=partial(remove_from_cart, cart),
+#             description="Removes a specified quantity of an item from the shopping cart."
+#         ),
+#         Tool(
+#             name="view_cart",
+#             func=partial(view_cart, cart),
+#             description="Displays the current contents of the shopping cart."
+#         ),
+#         Tool(
+#             name="clear_cart",
+#             func=partial(clear_cart, cart),
+#             description="Empties the shopping cart."
+#         ),
+#     ]
+#     return session_tools
 
-        return StreamingResponse(io.BytesIO(response.content), media_type="application/pdf", headers={
-            "Content-Disposition": f"attachment; filename=label_{tracking_number}.pdf"
-        })
-    except Exception as e:
-        return {"error": str(e)}
 
-#  LangChain Agent Creation
-def create_agent():
+# --- Session and Memory Management ---
+
+# This dictionary will store memory objects, with session IDs as keys.
+# WARNING: This is an in-memory store. It will be cleared if the server restarts.
+session_memories = {}
+
+def get_memory_for_session(session_id: str) -> ConversationBufferMemory:
+    """Retrieves or creates a memory object for a given session ID."""
+    if session_id not in session_memories:
+        # Ensure new memory objects are created with the correct configuration
+        session_memories[session_id] = ConversationBufferMemory(
+            memory_key="chat_history",
+            return_messages=True
+        )
+    return session_memories[session_id]
+
+# --- LangChain Agent Creation (Refactored) ---
+
+def create_agent_executor(memory: ConversationBufferMemory) -> AgentExecutor:
     """
-    Creates and returns the LangChain agent executor.
+    Creates and returns the LangChain agent executor for a given memory instance.
     """
     tools = get_all_tools()
 
@@ -74,44 +134,33 @@ def create_agent():
         openai_api_key=OPENAI_API_KEY
     )
 
-    memory = ConversationBufferMemory(
-        memory_key="chat_history",
-        return_messages=True
-    )
-
     SYSTEM_PROMPT = """
-        
         You are a friendly and helpful AI assistant for an e-commerce business called Chai Corner.
-
         Your job is to guide customers through:
         - viewing products,
         - placing an order,
         - getting an invoice,
         - making payment,
-        - receiving shipping label.
-
+        - receiving a shipping label.
         Here are the tools you have access to:
         {{tools}}
-
         **Conversation Flow to Follow**:
-
         1. Greet the user and ask how you can help.
         2. If the user asks about products or menu, use `products_tool` to show item names and prices.
-        3. If the user wants to order items, use the `add_to_cart`, `view_cart`, and `remove_from_cart` tools from `cart_tools` to manage their cart.
-        4. Generate an invoice and give the pdf to the customer for customer 58 using `invoice_tool`.  
-        *(Use the format: 'Generate 2 Madras Coffee and 1 Cardamom Chai for customer 58' to interface with the tool).*  
-        Let the customer verify everything is correct.
-        5. After invoice generation, show the invoice link using:  
-        **http://localhost:8001/download/invoice/{{invoice_id}}**
+        3. If the user wants to order items, use the `add_to_cart`, `view_cart`, `clear_cart`, and `remove_from_cart` tools to manage their cart.
         6. Ask the user if they want to proceed to payment. If yes, use the `paypal` tool to generate a payment link.
-        7. Once the customer confirms the payment, use the `finalize_order_tool` to mark the order complete.
-        8. Then use the `create_fedex_shipment` tool to generate tracking number and label URL. Display it to the customer.
-
+        7. Once confirmed, use a tool from the PayPal toolkit to generate a payment link for the order. Use order tools to keep track of order ID.
+        8. Once the customer says that they have paid, use the order number to confirm that they have indeed done so. Output the details to the customer
+        9. Then use the `create_fedex_shipment` tool to generate tracking number and label URL. Display it to the customer. Clear cart.
         Always follow these steps in order. Never skip steps. Confirm with the user at each stage.
-"""
-
-        
-
+    """
+    
+    
+        # 4. Generate an invoice and give the pdf to the customer for customer 58 using `invoice_tool`.
+        # *(Use the format: 'Generate 2 Madras Coffee and 1 Cardamom Chai for customer 58' to interface with the tool).*
+        # Let the customer verify everything is correct.
+        # 5. After invoice generation, show the invoice link using:
+        # **http://localhost:8001/download/invoice/{{invoice_id}}**
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", SYSTEM_PROMPT),
@@ -123,11 +172,68 @@ def create_agent():
     agent = create_tool_calling_agent(llm, tools, prompt)
 
     agent_executor = AgentExecutor(
-        agent=agent, 
-        tools=tools, 
-        memory=memory, 
-        verbose=True, 
+        agent=agent,
+        tools=tools,
+        memory=memory,  # Inject the session-specific memory here
+        verbose=True,
         handle_parsing_errors=True
     )
 
     return agent_executor
+
+# --- Main Chat Endpoint ---
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: str
+
+@app.post("/chat")
+async def chat_endpoint(request: ChatRequest):
+    """
+    Receives a message, retrieves the correct session memory,
+    creates an agent with that memory, and returns a response.
+    """
+    try:
+        session_id = request.session_id
+        
+        # 1. Get session-specific memory and cart tools
+        memory = get_memory_for_session(session_id)
+        # session_cart_tools = get_session_specific_cart_tools(session_id)
+        
+        # 2. Combine with any static, non-session tools
+        # all_tools_for_session = session_cart_tools + get_all_tools()
+
+        # 3. Create an agent executor with the combined, session-specific toolset
+        agent_executor = create_agent_executor(memory)
+
+        # 4. Invoke the agent
+        response = await agent_executor.ainvoke({"input": request.message})
+
+        return {"response": response.get("output")}
+
+    except Exception as e:
+        # Log the error for debugging
+        print(f"An error occurred in chat endpoint: {e}")
+        return {"error": "An internal server error occurred."}
+
+
+
+### Payment websocket connection
+class ConnectionManager:
+    """Manages active WebSocket connections."""
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def send_json_to_client(self, data: dict, websocket: WebSocket):
+        """Sends a JSON message to a specific client."""
+        await websocket.send_json(data)
+
+manager = ConnectionManager()
+
