@@ -13,12 +13,18 @@ class ApplePayLinkRequest(BaseModel):
     currency: str = "USD"
     order_id: Optional[str] = None
     description: Optional[str] = None
+
 @router.post("/link")
 def create_link(req: ApplePayLinkRequest):
     try:
-        return generate_apple_pay_link(amount=req.amount, currency=req.currency, order_id=req.order_id, description=req.description)
+        # product_name can be description or your brand
+        product_name = req.description or "Chai Corner Order"
+        # ✅ pass the correct parameter names the tool expects
+        url = generate_apple_pay_link.invoke({"amount_dollars": req.amount, "product_name": product_name})
+        return {"url": url}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
 @router.post("/session/{session_id}")
 def set_session(session_id: str):
     try:

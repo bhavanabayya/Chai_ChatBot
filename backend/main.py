@@ -320,11 +320,11 @@ def create_agent() -> AgentExecutor:
          1. **[Pay with PayPal](PayPal_URL_from_create_order)**
          2. **[Pay with Apple Pay](Stripe_URL_from_generate_apple_pay_link)**"
     
-       
-    7. When checking payment status or when asked about payment method:
-       - ALWAYS use get_order_id and get_order_details tools to check PayPal payment status FIRST
+    7. When checking payment status:
+       - Check BOTH methods in the same turn:
+            (a) PayPal: call get_order_id and then get_order_details or capture_order to confirm status.
+            (b) Apple Pay: call get_apple_pay_session_status with the session_id from the last generated Stripe link.
        - If PayPal status is "APPROVED" or "COMPLETED", use create_fedex_shipment and respond with: "✅ Payment received via PayPal! 📦 Shipment has been successfully created! Here are the details:"
-       - ONLY if PayPal is not completed, use get_apple_pay_session_status tool to check Apple Pay status
        - If Apple Pay shows "complete" and "paid" status, use create_fedex_shipment and respond with: "✅ Payment received via Apple Pay! 📦 Shipment has been successfully created! Here are the details:"
        - NEVER guess or assume the payment method - ALWAYS use the tools
        - MANDATORY: Use the actual tool results to determine payment method, not memory or assumptions
