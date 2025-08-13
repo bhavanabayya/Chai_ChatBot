@@ -1,15 +1,16 @@
 import os
 import sys
 import io
-from pydantic import BaseModel
-import requests
 from pathlib import Path
 from functools import partial
+from pydantic import BaseModel, create_model
+from dotenv import load_dotenv
+
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
+import asyncio
 
 from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
@@ -17,17 +18,9 @@ from langchain.memory import ConversationBufferMemory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.tools import Tool
 
-from typing import List
 from tools.tool_config import get_all_tools
 from tools.quickbooks.quickbooks_wrapper import QuickBooksWrapper
-
-from tools.cart.cart_tool import (
-    get_cart_for_session,
-    add_to_cart,
-    remove_from_cart,
-    view_cart,
-    clear_cart
-)
+from tools.paypal.trigger_payment_tool import session_active_websockets 
 
 # --- Environment and App Setup ---
 
@@ -42,10 +35,11 @@ OPENAI_API_MODEL = os.getenv("OPENAI_API_MODEL")
 app = FastAPI()
 
 # Define allowed origins for CORS
-# Your React/TypeScript frontend will likely be on localhost:3000
 origins = [
+    "http://10.0.0.80:8080",
     "http://localhost:8080",
-    # "http://localhost:5173", # Common for Vite projects
+    "http://localhost:5173",
+    "http://127.0.0.1:8080",
 ]
 
 app.add_middleware(
@@ -71,43 +65,12 @@ def download_invoice(invoice_id: str):
     except Exception as e:
         return {"error": str(e)}
 
-# --- Cart Tool Creation ---
-# def get_session_specific_cart_tools(session_id: str) -> list:
-#     """Creates tool instances that are bound to a specific session's cart."""
-#     # Get the specific cart for this session
-#     cart = get_cart_for_session(session_id)
-
-#     # Create a list of Tool objects, using partial to bind the session's cart
-#     # to the first argument of each cart function.
-#     session_tools = [
-#         Tool(
-#             name="add_to_cart",
-#             func=partial(add_to_cart, cart),
-#             description="Adds a specified quantity of an item to the shopping cart."
-#         ),
-#         Tool(
-#             name="remove_from_cart",
-#             func=partial(remove_from_cart, cart),
-#             description="Removes a specified quantity of an item from the shopping cart."
-#         ),
-#         Tool(
-#             name="view_cart",
-#             func=partial(view_cart, cart),
-#             description="Displays the current contents of the shopping cart."
-#         ),
-#         Tool(
-#             name="clear_cart",
-#             func=partial(clear_cart, cart),
-#             description="Empties the shopping cart."
-#         ),
-#     ]
-#     return session_tools
-
 
 # --- Session and Memory Management ---
 
 # This dictionary will store memory objects, with session IDs as keys.
 # WARNING: This is an in-memory store. It will be cleared if the server restarts.
+from typing import Dict
 session_memories = {}
 
 def get_memory_for_session(session_id: str) -> ConversationBufferMemory:
@@ -118,15 +81,38 @@ def get_memory_for_session(session_id: str) -> ConversationBufferMemory:
             memory_key="chat_history",
             return_messages=True
         )
+        session_memories[session_id].chat_memory.add_ai_message(f"Session ID: {session_id}")
     return session_memories[session_id]
 
-# --- LangChain Agent Creation (Refactored) ---
 
-def create_agent_executor(memory: ConversationBufferMemory) -> AgentExecutor:
+import logging
+logging.basicConfig(
+    level=logging.INFO, # Set the lowest level of message to display
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    stream=sys.stdout, # Ensure logs go to the terminal
+)
+
+@app.websocket("/ws/{session_id}")
+async def websocket_endpoint(ws: WebSocket, session_id: str):
+    await ws.accept()
+    session_active_websockets[session_id] = ws
+    logging.info(f"Session_id in main.websocket_endpoint: {session_id}")
+    try:
+        while True:
+            data = await ws.receive_json()
+            print(f"Message from {session_id}: {data}")
+    except Exception:
+        session_active_websockets.pop(session_id, None)
+        
+import inspect
+
+def create_agent_executor(memory: ConversationBufferMemory, session_id: str) -> AgentExecutor:
     """
     Creates and returns the LangChain agent executor for a given memory instance.
     """
-    tools = get_all_tools()
+    base_tools = get_all_tools()
+    
+    logging.info(f"Session_id in main.create_agent_executor: {session_id}")
 
     llm = ChatOpenAI(
         model=OPENAI_API_MODEL,
@@ -134,33 +120,18 @@ def create_agent_executor(memory: ConversationBufferMemory) -> AgentExecutor:
         openai_api_key=OPENAI_API_KEY
     )
 
+    # 👇 Simplified the prompt. The agent no longer needs to worry about the session_id.
     SYSTEM_PROMPT = """
         You are a friendly and helpful AI assistant for an e-commerce business called Chai Corner.
-        Your job is to guide customers through:
-        - viewing products,
-        - placing an order,
-        - getting an invoice,
-        - making payment,
-        - receiving a shipping label.
+        Your job is to guide customers through viewing products and placing an order.
         Here are the tools you have access to:
         {{tools}}
         **Conversation Flow to Follow**:
         1. Greet the user and ask how you can help.
         2. If the user asks about products or menu, use `products_tool` to show item names and prices.
-        3. If the user wants to order items, use the `add_to_cart`, `view_cart`, `clear_cart`, and `remove_from_cart` tools to manage their cart.
-        6. Ask the user if they want to proceed to payment. If yes, use the `paypal` tool to generate a payment link.
-        7. Once confirmed, use a tool from the PayPal toolkit to generate a payment link for the order. Use order tools to keep track of order ID.
-        8. Once the customer says that they have paid, use the order number to confirm that they have indeed done so. Output the details to the customer
-        9. Then use the `create_fedex_shipment` tool to generate tracking number and label URL. Display it to the customer. Clear cart.
-        Always follow these steps in order. Never skip steps. Confirm with the user at each stage.
+        3. Use the `add_to_cart`, `view_cart`, `clear_cart`, and `remove_from_cart` tools to manage the user's cart.
+        4. Ask the user if they want to proceed to payment. If yes, call the `trigger_payment_tool` for which you MUST provide the cart_items data using the `view_cart` and `products_tool` tools.
     """
-    
-    
-        # 4. Generate an invoice and give the pdf to the customer for customer 58 using `invoice_tool`.
-        # *(Use the format: 'Generate 2 Madras Coffee and 1 Cardamom Chai for customer 58' to interface with the tool).*
-        # Let the customer verify everything is correct.
-        # 5. After invoice generation, show the invoice link using:
-        # **http://localhost:8001/download/invoice/{{invoice_id}}**
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", SYSTEM_PROMPT),
@@ -169,12 +140,12 @@ def create_agent_executor(memory: ConversationBufferMemory) -> AgentExecutor:
         MessagesPlaceholder(variable_name="agent_scratchpad"),
     ])
 
-    agent = create_tool_calling_agent(llm, tools, prompt)
+    agent = create_tool_calling_agent(llm, base_tools, prompt)
 
     agent_executor = AgentExecutor(
         agent=agent,
-        tools=tools,
-        memory=memory,  # Inject the session-specific memory here
+        tools=base_tools,
+        memory=memory,
         verbose=True,
         handle_parsing_errors=True
     )
@@ -196,44 +167,17 @@ async def chat_endpoint(request: ChatRequest):
     try:
         session_id = request.session_id
         
-        # 1. Get session-specific memory and cart tools
         memory = get_memory_for_session(session_id)
-        # session_cart_tools = get_session_specific_cart_tools(session_id)
         
-        # 2. Combine with any static, non-session tools
-        # all_tools_for_session = session_cart_tools + get_all_tools()
+        logging.info(f"Session_id in main.chat_endpoint: {session_id}")
 
-        # 3. Create an agent executor with the combined, session-specific toolset
-        agent_executor = create_agent_executor(memory)
+        agent_executor = create_agent_executor(memory, session_id)
 
-        # 4. Invoke the agent
         response = await agent_executor.ainvoke({"input": request.message})
 
         return {"response": response.get("output")}
 
     except Exception as e:
-        # Log the error for debugging
         print(f"An error occurred in chat endpoint: {e}")
         return {"error": "An internal server error occurred."}
-
-
-
-### Payment websocket connection
-class ConnectionManager:
-    """Manages active WebSocket connections."""
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-
-    async def send_json_to_client(self, data: dict, websocket: WebSocket):
-        """Sends a JSON message to a specific client."""
-        await websocket.send_json(data)
-
-manager = ConnectionManager()
 
