@@ -66,7 +66,7 @@ async def trigger_payment(cart_items: List[CartItem], session_id: str):
             mode='payment',
             ui_mode='embedded', 
             # Return_url for post-payment redirects
-            return_url=f'http://10.0.0.80:8080'
+            return_url=f'http://localhost:8080'
         )
         
         logging.info(f"Stripe Checkout Session created: {checkout_session.id}")
