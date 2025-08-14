@@ -64,7 +64,8 @@ async def trigger_payment(cart_items: List[CartItem], session_id: str):
         checkout_session = stripe.checkout.Session.create(
             line_items=line_items,
             mode='payment',
-            ui_mode='embedded', 
+            ui_mode='embedded',
+            billing_address_collection='auto',
             # Return_url for post-payment redirects
             return_url=f'http://localhost:8080'
         )
