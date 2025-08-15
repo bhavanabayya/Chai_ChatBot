@@ -1,121 +1,3 @@
-# import requests
-# from backend.token_service import get_token_for_provider, refresh_token_for_provider
-
-# def _request_with_auto_refresh(method, url, headers=None, **kwargs):
-#     provider = "paypal"
-#     hdrs = dict(headers or {})
-#     tok = get_token_for_provider(provider)
-#     if tok and isinstance(tok, dict) and tok.get("access_token"):
-#         hdrs.setdefault("Authorization", f"Bearer {tok['access_token']}")
-#     resp = requests.request(method.upper(), url, headers=hdrs, **kwargs)
-#     if getattr(resp, "status_code", None) in (401, 403):
-#         new_tok = refresh_token_for_provider(provider)
-#         if new_tok and new_tok.get("access_token"):
-#             hdrs["Authorization"] = f"Bearer {new_tok['access_token']}"
-#         resp = requests.request(method.upper(), url, headers=hdrs, **kwargs)
-#     return resp
-
-# import os
-# from langchain.agents import Tool
-# from langchain_core.tools import tool
-# from dotenv import load_dotenv
-
-# from paypal_agent_toolkit.langchain.toolkit import PayPalToolkit
-# from paypal_agent_toolkit.shared.configuration import Configuration, Context
-
-# load_dotenv()
-
-# def get_paypal_tools() -> list[Tool]:
-#     """
-#     Initializes the PayPal Toolkit and returns a list of LangChain tools.
-
-#     Returns:
-#         list[Tool]: A list of tools for creating, getting, and capturing PayPal orders.
-    
-#     Raises:
-#         ValueError: If PayPal credentials are not found in the environment variables.
-#     """
-
-#     paypal_client_id = os.getenv("PAYPAL_CLIENT_ID")
-#     paypal_client_secret = os.getenv("PAYPAL_CLIENT_SECRET")
-
-#     if not paypal_client_id or not paypal_client_secret:
-#         raise ValueError(
-#             "PayPal client ID and secret must be set in environment variables."
-#         )
-
-#     # Configure the allowed actions for the PayPal agent
-#     configuration = Configuration(
-#         actions={
-#             # "invoices": {
-#             #     "create": True,
-#             #     "list": True,
-#             #     "send": True,
-#             # },
-#             "orders": {
-#                 "create": True,
-#                 "get": True,
-#                 "capture": True,
-#             }
-#         },
-#         context=Context(
-#             sandbox=True  # Use sandbox for development and testing
-#         )
-#     )
-
-#     # Initialize the toolkit
-#     toolkit = PayPalToolkit(
-#         client_id=paypal_client_id,
-#         secret=paypal_client_secret,
-#         configuration=configuration
-#     )
-
-#     return toolkit.get_tools()
-
-# # Combine with other payment methods later
-
-# #
-# #
-# #
-
-# order_id: str = ""
-
-# @tool
-# def save_order_id(new_order_id: str) -> str:
-#     """
-#     Saves the provided PayPal order ID to a global variable for later use.
-#     This is useful for persisting the order ID between different agent steps or calls.
-    
-#     Args:
-#         new_order_id (str): The PayPal order ID to save.
-        
-#     Returns:
-#         str: A confirmation message indicating the order ID has been saved.
-#     """
-#     global order_id
-#     order_id = new_order_id
-#     return f"Order ID '{order_id}' has been saved successfully."
-
-
-# @tool
-# def get_order_id() -> str:
-#     """
-#     Retrieves the previously saved PayPal order ID from a global variable.
-#     Use this tool to get the order ID that was saved using the `save_order_id` tool.
-    
-#     Returns:
-#         str: The saved PayPal order ID, or a message if no ID has been saved yet.
-#     """
-#     if order_id:
-#         return order_id
-#     else:
-#         return "No order ID has been saved yet."
-
-
-# # payment_tool = get_paypal_tools()
-# order_tools = [save_order_id, get_order_id]
-# tools/paypal/payment_tool.py
-
 import os
 import json
 import requests
@@ -126,6 +8,7 @@ from langchain.agents import Tool
 from langchain_core.tools import tool
 from dotenv import load_dotenv
 
+from backend.state.session import set_order_id, get_order_id
 from backend.token_service import get_token_for_provider, refresh_token_for_provider
 from paypal_agent_toolkit.langchain.toolkit import PayPalToolkit
 from paypal_agent_toolkit.shared.configuration import Configuration, Context
@@ -200,19 +83,19 @@ def _read_order_id() -> Optional[str]:
         pass
     return None
 
-# ----------------------------
-# Router-facing PLAIN functions
-# (import these in backend/routers/paypal.py)
-# ----------------------------
-def save_order_id(new_order_id: str) -> str:
-    """Save the PayPal order ID for later use."""
-    _write_order_id(new_order_id)
-    return f"Order ID '{new_order_id}' has been saved successfully."
+# # ----------------------------
+# # Router-facing PLAIN functions
+# # (import these in backend/routers/paypal.py)
+# # ----------------------------
+# def save_order_id(new_order_id: str) -> str:
+#     """Save the PayPal order ID for later use."""
+#     _write_order_id(new_order_id)
+#     return f"Order ID '{new_order_id}' has been saved successfully."
 
-def get_order_id() -> str:
-    """Get the last saved PayPal order ID, or a message if none exists."""
-    oid = _read_order_id()
-    return oid if oid else "No order ID has been saved yet."
+# def get_order_id() -> str:
+#     """Get the last saved PayPal order ID, or a message if none exists."""
+#     oid = _read_order_id()
+#     return oid if oid else "No order ID has been saved yet."
 
 def create_paypal_order(
     amount: float,
@@ -268,8 +151,9 @@ def capture_paypal_order(order_id: Optional[str] = None) -> dict:
 # Agent-facing LangChain tools
 # (optional, if your agent wants to call them)
 # ----------------------------
+
 @tool
-def save_order_id_tool(new_order_id: str) -> str:
+def save_order_id_tool(session_id: str, order_id: str) -> str:
     """
     Saves the provided PayPal order ID to a global variable for later use.
     This is useful for persisting the order ID between different agent steps or calls.
@@ -280,19 +164,19 @@ def save_order_id_tool(new_order_id: str) -> str:
     Returns:
         str: A confirmation message indicating the order ID has been saved.
     """
-    global order_id
-    order_id = new_order_id
+    # TODO: Actually make sure order_id is being saved successfully in the future
+    set_order_id(session_id, order_id)
     return f"Order ID '{order_id}' has been saved successfully."
 
 @tool("get_order_id_tool")
-def get_order_id_tool() -> dict:
+def get_order_id_tool(session_id: str) -> dict:
     """
     Return the saved PayPal order id.
     Output shape:
       {"exists": true, "order_id": "XYZ"}  OR  {"exists": false, "order_id": null}
     Never return prose.
     """
-    oid = _read_order_id()
+    oid = get_order_id(session_id)
     if oid:
         return {"exists": True, "order_id": oid}
     return {"exists": False, "order_id": None}
@@ -303,8 +187,6 @@ order_tools = [save_order_id_tool, get_order_id_tool]
 # Explicit exports
 __all__ = [
     "get_paypal_tools",
-    "save_order_id",
-    "get_order_id",
     "create_paypal_order",
     "capture_paypal_order",
     "save_order_id_tool",

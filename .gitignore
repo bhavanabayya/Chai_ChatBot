@@ -1,6 +1,7 @@
 # Project specific
 invoice_*.pdf
-
+.tokens.json
+backend/.tokens.json
 
 # --- Python Stuffs ---
 # Byte-compiled / optimized / C extensions

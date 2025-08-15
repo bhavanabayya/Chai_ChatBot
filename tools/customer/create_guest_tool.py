@@ -1,16 +1,16 @@
 from langchain_core.tools import tool
 from tools.quickbooks.quickbooks_wrapper import QuickBooksWrapper
 import json
-from backend.chat_state import set_customer  # ✅ centralized
+from backend.state.session import set_customer
 
 @tool
-def create_guest_tool(input: str) -> str:
+def create_guest_tool(session_id: str, name: str) -> str:
     """
     Creates a guest customer profile in QuickBooks.
     Skips if we already have a real customer.
     """
-    from backend.chat_state import get_state
-    state = get_state()
+    from backend.state.session import get_state
+    state = get_state(session_id)
 
     # 🚫 Don't downgrade an existing real customer to guest
     if state.customer_id and not state.is_guest:
@@ -22,15 +22,15 @@ def create_guest_tool(input: str) -> str:
 
     # The agent passes just the user's name directly to this tool
     # Add "Guest" prefix to the user's name
-    if input.strip():
-        guest_name = f"Guest {input.strip()}"
+    if name.strip():
+        guest_name = f"Guest {name.strip()}"
     else:
         guest_name = "Guest Customer"
 
     qb = QuickBooksWrapper()
     try:
         created = qb.create_guest_customer(guest_name)
-        set_customer(created["Id"], is_guest=True)
+        set_customer(session_id, created["Id"], is_guest=True)
         return json.dumps({
             "status": "guest_created",
             "id": created["Id"],

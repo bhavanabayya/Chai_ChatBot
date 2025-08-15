@@ -1,5 +1,4 @@
 # Core UI and App
-streamlit
 fastapi
 uvicorn
 

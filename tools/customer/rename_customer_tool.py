@@ -3,9 +3,10 @@ from pydantic import BaseModel
 from typing import Optional
 from tools.quickbooks.quickbooks_wrapper import QuickBooksWrapper
 import json
-from backend.chat_state import set_customer  # ✅ centralized
+from backend.state.session import set_customer  # ✅ centralized
 
 class RenameInput(BaseModel):
+    session_id: str
     customer_id: str
     new_name: str
     phone: Optional[str] = None
@@ -17,6 +18,7 @@ class RenameInput(BaseModel):
 
 @tool(args_schema=RenameInput)
 def rename_customer_tool(
+    session_id: str,
     customer_id: str,
     new_name: str,
     phone: Optional[str] = None,
@@ -46,7 +48,7 @@ def rename_customer_tool(
 
     try:
         updated = qb.rename_customer(customer_id, new_name, phone, email, address)
-        set_customer(updated["Id"], is_guest=False)  # ✅ promote centrally
+        set_customer(session_id, updated["Id"], is_guest=False)  # ✅ promote centrally
         return json.dumps({"status": "renamed", "id": updated["Id"], "name": updated["DisplayName"]})
     except Exception as e:
         return json.dumps({"status": "error", "message": f"Rename failed: {str(e)}"})

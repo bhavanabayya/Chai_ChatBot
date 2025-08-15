@@ -1,11 +1,11 @@
 # tools/create_customer_tool.py
 from langchain_core.tools import tool
 from tools.quickbooks.quickbooks_wrapper import QuickBooksWrapper
-from backend.chat_state import set_customer  # ✅ central source of truth
+from backend.state.session import set_customer  # ✅ central source of truth
 import json
 
 @tool
-def create_customer_tool(input: str) -> str:
+def create_customer_tool(session_id: str, input: str) -> str:
     """
     Creates (or fetches) a full, non-guest customer in QuickBooks and updates app state.
 
@@ -48,7 +48,7 @@ def create_customer_tool(input: str) -> str:
         qb_name = customer.get("DisplayName", display_name)
 
         # ✅ Update centralized state (also ensures is_guest=False)
-        set_customer(qb_id, is_guest=False)
+        set_customer(session_id, qb_id, is_guest=False)
 
         # Always return "created" status since this tool is only called when creating new customers
         # The QuickBooks wrapper handles deduplication internally, but from the agent's perspective,

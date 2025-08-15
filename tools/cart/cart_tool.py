@@ -1,97 +1,165 @@
+# from collections import defaultdict
+# from langchain_core.tools import tool
+# from backend.state.session import get_cart, add_to_cart # remove_x_from_cart, remove_completely_from_cart
+
+# # This dictionary will store cart objects, with session IDs as keys.
+# # Structure: { "session_id_1": {"item_1": qty, "item_2": qty}, "session_id_2": ... }
+# # WARNING: This is an in-memory store. It will be cleared if the server restarts.
+# session_carts = {}
+
+# def get_cart_for_session(session_id: str) -> defaultdict:
+#     """Retrieves or creates a cart object for a given session ID."""
+#     return get_cart(session_id)
+
+# @tool
+# def add_to_cart(session_id: str, item_name: str, quantity: int) -> str:
+#     """
+#     Adds a specified quantity of an item to the shopping cart.
+#     """
+#     if quantity <= 0:
+#         return "Quantity must be a positive integer to add to cart."
+    
+#     cart = get_cart(session_id)
+    
+#     cart[item_name] += quantity
+    
+#     print(f"--- TOOL CALL: add_to_cart ---")
+#     print(f"Cart state: {dict(cart)}")
+#     return f"Added {quantity} x {item_name} to the cart. Current quantity: {cart[item_name]}."
+
+# @tool
+# def remove_from_cart(session_id: str, item_name: str, quantity: int) -> str:
+#     """
+#     Removes a specified quantity of an item from the shopping cart.
+#     """
+#     if quantity <= 0:
+#         return "Quantity must be a positive integer to remove from cart."
+    
+#     cart = get_cart(session_id)
+    
+#     if item_name not in cart or cart[item_name] == 0:
+#         return f"{item_name} is not in the cart."
+
+#     current_quantity = cart[item_name]
+#     if quantity >= current_quantity:
+#         del cart[item_name]
+#         print(f"--- TOOL CALL: remove_from_cart ---")
+#         print(f"Cart state: {dict(cart)}")
+#         return f"Removed all {current_quantity} x {item_name} from the cart."
+#     else:
+#         cart[item_name] -= quantity
+#         print(f"--- TOOL CALL: remove_from_cart ---")
+#         print(f"Cart state: {dict(cart)}")
+#         return f"Removed {quantity} x {item_name} from the cart. Remaining quantity: {cart[item_name]}."
+
+# @tool
+# def view_cart(session_id: str) -> str:
+#     """
+#     Displays the current contents of the shopping cart.
+#     """
+#     cart = get_cart(session_id)
+    
+#     if not cart:
+#         print(f"--- TOOL CALL: view_cart --- Cart: Empty")
+#         return "The cart is currently empty."
+
+#     cart_items = [f"{qty} x {item}" for item, qty in cart.items()]
+#     cart_summary = ", ".join(cart_items)
+#     print(f"--- TOOL CALL: view_cart --- Cart: {cart_summary}")
+#     return f"The cart contains: {cart_summary}."
+
+# @tool
+# def clear_cart(session_id: str) -> str:
+#     """
+#     Empties the shopping cart.
+#     """
+#     cart = get_cart(session_id)
+    
+#     cart.clear()
+#     print(f"--- TOOL CALL: clear_cart --- Cart: Cleared")
+#     return "The cart has been cleared."
+
+# cart_tools = [add_to_cart, remove_from_cart, view_cart, clear_cart]
+
 from collections import defaultdict
 from langchain_core.tools import tool
-import streamlit as st
 
-# --- In-memory Global Cart Storage ---
-# This dictionary will store items for a single, global shopping cart.
-# In a real application, this might be tied to a session ID or user ID.
-# Structure: {item_name: quantity, ...}
-if "cart" not in st.session_state:
-    st.session_state.cart = defaultdict(int)
+# This dictionary will store cart objects, with session IDs as keys.
+# Structure: { "session_id_1": {"item_1": qty, "item_2": qty}, "session_id_2": ... }
+# WARNING: This is an in-memory store. It will be cleared if the server restarts.
+session_carts = {}
+
+def get_cart_for_session(session_id: str) -> defaultdict:
+    """Retrieves or creates a cart object for a given session ID."""
+    if session_id not in session_carts:
+        session_carts[session_id] = defaultdict(int)
+    return session_carts[session_id]
 
 @tool
-def add_to_cart(item_name: str, quantity: int) -> str:
+def add_to_cart(session_id: str, item_name: str, quantity: int) -> str:
     """
-    Adds a specified quantity of an item to the global shopping cart.
-    Args:
-        item_name (str): The name of the item to add (e.g., "Espresso Pods", "Decaf Pods").
-        quantity (int): The quantity of the item to add. Must be a positive integer.
-    Returns:
-        str: A confirmation message about the item added to the cart.
+    Adds a specified quantity of an item to the shopping cart.
     """
-    if "cart" not in st.session_state:
-        st.session_state.cart = defaultdict(int)
     if quantity <= 0:
         return "Quantity must be a positive integer to add to cart."
-    st.session_state.cart[item_name] += quantity
+    
+    cart = get_cart_for_session(session_id)
+    
+    cart[item_name] += quantity
     print(f"--- TOOL CALL: add_to_cart ---")
-    print(f"Item: {item_name}, Quantity: {quantity}")
-    return f"Added {quantity} x {item_name} to the cart. Current quantity: {st.session_state.cart[item_name]}."
+    print(f"Cart state: {dict(cart)}")
+    return f"Added {quantity} x {item_name} to the cart. Current quantity: {cart[item_name]}."
 
 @tool
-def remove_from_cart(item_name: str, quantity: int) -> str:
+def remove_from_cart(session_id: str, item_name: str, quantity: int) -> str:
     """
-    Removes a specified quantity of an item from the global shopping cart.
-    If the quantity to remove exceeds the quantity in the cart, the item is fully removed.
-    Args:
-        item_name (str): The name of the item to remove.
-        quantity (int): The quantity of the item to remove. Must be a positive integer.
-    Returns:
-        str: A confirmation message about the item removed from the cart.
+    Removes a specified quantity of an item from the shopping cart.
     """
-    if "cart" not in st.session_state:
-        st.session_state.cart = defaultdict(int)
     if quantity <= 0:
         return "Quantity must be a positive integer to remove from cart."
-    if item_name not in st.session_state.cart or st.session_state.cart[item_name] == 0:
+    
+    cart = get_cart_for_session(session_id)
+    
+    if item_name not in cart or cart[item_name] == 0:
         return f"{item_name} is not in the cart."
 
-    current_quantity = st.session_state.cart[item_name]
+    current_quantity = cart[item_name]
     if quantity >= current_quantity:
-        del st.session_state.cart[item_name]
+        del cart[item_name]
         print(f"--- TOOL CALL: remove_from_cart ---")
-        print(f"Item: {item_name}, Quantity: all removed")
+        print(f"Cart state: {dict(cart)}")
         return f"Removed all {current_quantity} x {item_name} from the cart."
     else:
-        st.session_state.cart[item_name] -= quantity
+        cart[item_name] -= quantity
         print(f"--- TOOL CALL: remove_from_cart ---")
-        print(f"Item: {item_name}, Quantity: {quantity}")
-        return f"Removed {quantity} x {item_name} from the cart. Remaining quantity: {st.session_state.cart[item_name]}."
+        print(f"Cart state: {dict(cart)}")
+        return f"Removed {quantity} x {item_name} from the cart. Remaining quantity: {cart[item_name]}."
 
 @tool
-def view_cart() -> str:
+def view_cart(session_id: str) -> str:
     """
-    Displays the current contents of the global shopping cart.
-    Returns:
-        str: A string listing the items and quantities in the cart, or a message if the cart is empty.
+    Displays the current contents of the shopping cart.
     """
+    cart = get_cart_for_session(session_id)
     
-    if "cart" not in st.session_state:
-        st.session_state.cart = defaultdict(int)
-    elif not st.session_state.cart:
-        print(f"--- TOOL CALL: view_cart ---")
-        print(f"Cart: Empty")
-        return f"The cart is currently empty."
-    
-    cart_items = [f"{qty} x {item}" for item, qty in st.session_state.cart.items()]
+    if not cart:
+        print(f"--- TOOL CALL: view_cart --- Cart: Empty")
+        return "The cart is currently empty."
+
+    cart_items = [f"{qty} x {item}" for item, qty in cart.items()]
     cart_summary = ", ".join(cart_items)
-    print(f"--- TOOL CALL: view_cart ---")
-    print(f"Cart: {cart_summary}")
+    print(f"--- TOOL CALL: view_cart --- Cart: {cart_summary}")
     return f"The cart contains: {cart_summary}."
 
 @tool
-def clear_cart() -> str:
+def clear_cart(session_id: str) -> str:
     """
-    Empties the global shopping cart.
-    Returns:
-        str: A confirmation message that the cart has been cleared.
+    Empties the shopping cart.
     """
+    cart = get_cart_for_session(session_id)
     
-    if "cart" not in st.session_state:
-        st.session_state.cart = defaultdict(int)
-    st.session_state.cart.clear()
-    print(f"--- TOOL CALL: clear_cart ---")
-    print(f"Cart: Cleared")
-    return f"The cart has been cleared."
+    cart.clear()
+    print(f"--- TOOL CALL: clear_cart --- Cart: Cleared")
+    return "The cart has been cleared."
 
 cart_tools = [add_to_cart, remove_from_cart, view_cart, clear_cart]

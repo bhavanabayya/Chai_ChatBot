@@ -1,16 +1,16 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-from tools.paypal.payment_tool import get_order_id, save_order_id, create_paypal_order, capture_paypal_order
+from backend.state.session import get_order_id, set_order_id
+from tools.payment.paypal.paypal_tool import create_paypal_order, capture_paypal_order
 
-# from tools.paypal.payment_tool import get_order_id, save_order_id, create_paypal_order, capture_paypal_order
 router = APIRouter(prefix="/api/paypal", tags=["paypal"])
 class SaveOrder(BaseModel):
     order_id: str
-@router.post("/save_order_id")
+@router.post("/set_order_id")
 def save(o: SaveOrder):
     try:
-        return {"ok": save_order_id(o.order_id)}
+        return {"ok": set_order_id(o.order_id)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 @router.get("/order_id")

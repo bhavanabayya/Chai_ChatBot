@@ -1,17 +1,31 @@
 
 from langchain.tools import tool
 from tools.quickbooks.quickbooks_wrapper import QuickBooksWrapper
+from backend.state.session import get_customer
 import re
+
+import sys
+import logging
+logging.basicConfig(
+    level=logging.INFO, # Set the lowest level of message to display
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    stream=sys.stdout, # Ensure logs go to the terminal
+)
+
 @tool("create_invoice_tool")
-def create_invoice_tool(input_text: str) -> str:
+def create_invoice_tool(input_text: str, session_id: str) -> str:
 
     """
     Example: 'Generate 2 Madras Coffee and 1 Elaichi Chai for customer 58'
     """
     customer_match = re.search(r"customer\s+(\d+)", input_text, re.IGNORECASE)
-    if not customer_match:
-        return " Could not find customer ID."
-    customer_id = customer_match.group(1)
+    # customer_id = customer_match.group(1)
+    
+    customer_id = get_customer(session_id)
+    
+    logging.info(f"Customer_id in create_invoice_tool.py: {customer_id}")
+    
+    
 
     item_matches = re.findall(r"(\d+)\s+([a-zA-Z\s]+?)(?:,|and|for|$)", input_text, re.IGNORECASE)
     if not item_matches:
@@ -45,6 +59,7 @@ def create_invoice_tool(input_text: str) -> str:
             "Amount": int(qty) * price,
             "Id": str(i)
         })
+    logging.info(f"Line items: {line_items}")
 
     qb = QuickBooksWrapper() 
     invoice = qb.create_invoice(customer_id, line_items)
@@ -53,7 +68,5 @@ def create_invoice_tool(input_text: str) -> str:
 
     pdf_link = f"http://localhost:8001/download/invoice/{invoice_id}"
     return f" Created Invoice #{doc_number}\n📄 [Download PDF Invoice]({pdf_link})"
-
-    
 
 invoice_tool = create_invoice_tool
