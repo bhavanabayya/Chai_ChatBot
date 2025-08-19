@@ -1,8 +1,0 @@
-{
-  "quickbooks": {
-    "access_token": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2IiwieC5vcmciOiJIMCJ9..cUIPX7VELf1-428HoF7Cmg.20ufGrbqwJiMoaSSdDURyPKuouWi9X-Hw6fCUocWwVIWe9gjnm_8BIwMp1Ytqv-iQXNl-ExsKNVrZau4Ettf4JfN9t7Ur0HNjRCoPw76lsNpKZ2mONDdFEvqWgJbJX19S9j0D3WsYB7dF8TU2lN49uh2BCUuW25SG4G8EB0YouG1Z5LT0vbUMOT7LOoqyoYmfsrkyVRakRg-tgY-pc2k2fbkPe6eWctH-ginC-nP4xGEYGwu7L3co5QU2yuS64Y2402Dg__ATKKsoU1XT8XrtopQp8mzHHWsPhaFFPUuilVEdnZBqkao7QYR2QNwe3Jy3A8NycQI2gvMdlf6OsHCFl8FzzHkf3Rfa_noe6hz2ZvahuKm2CYFYUnEfBQFNEOVvw-2Ydsy-NphaQEAXZK5QrBnAPVJ4vSgQxLj-o7uBu0KFIdMAfymcgzy_PxP9d1WBWg2BmNUQCkV3t14ZTH85VVnj27doCbHSGbOW7acIj8.QG_rtTmjEcRakW2txTupXQ",
-    "refresh_token": "RT1-143-H0-1763764000gvrnhf36tzv95c6cngtm",
-    "access_expires_at": 1755107456,
-    "refresh_expires_at": 1763763701
-  }
-}
