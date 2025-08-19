@@ -67,12 +67,22 @@ def get_websocket(session_id:str):
     return get_state(session_id).websocket
 
 
-### Order ###
+### Stripe Order ###
 
-def set_order_id(session_id: str, order_id: str):
+def set_stripe_order_id(session_id: str, stripe_order_id: str):
     s = get_state(session_id)
-    s.order_id = order_id 
+    s.stripe_order_id = stripe_order_id 
     save_state(session_id, s)
 
-def get_order_id(session_id:str):
-    return get_state(session_id).order_id
+def get_stripe_order_id(session_id:str):
+    return get_state(session_id).stripe_order_id
+
+### PayPal Order ###
+
+def set_paypal_order_id(session_id: str, paypal_order_id: str):
+    s = get_state(session_id)
+    s.paypal_order_id = paypal_order_id 
+    save_state(session_id, s)
+
+def get_paypal_order_id(session_id:str):
+    return get_state(session_id).paypal_order_id

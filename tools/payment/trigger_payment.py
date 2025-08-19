@@ -6,6 +6,8 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 from backend.state.session import get_websocket
 import stripe
+from backend.state.session import set_stripe_order_id
+
 
 # --- Environment Setup ---
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
@@ -67,12 +69,15 @@ async def trigger_payment(cart_items: List[CartItem], session_id: str):
             line_items=line_items,
             mode='payment',
             ui_mode='embedded',
-            billing_address_collection='auto',
+            # billing_address_collection='auto',
+            billing_address_collection='required',
             # Return_url for post-payment redirects
-            return_url=f'http://localhost:8080'
+            # return_url=f'http://localhost:8080'
+            redirect_on_completion='never'
         )
         
         logging.info(f"Stripe Checkout Session created: {checkout_session.id}")
+        set_stripe_order_id(session_id, checkout_session.id) # Save the Stripe checkout order ID for later
 
         message = {
             "type": "payment_intent_created",
@@ -81,7 +86,7 @@ async def trigger_payment(cart_items: List[CartItem], session_id: str):
         await ws.send_json(message)
 
         # The tool returns a confirmation that the payment process has been initiated.
-        return f"Payment form initialized for session {session_id}. User should now see the form to complete payment."
+        return f"Payment form initialized for session {session_id}. Let user know, 'The payment form has been initialized.'. DO NOT ask customer to let you know once they are finished paying"
 
     except Exception as e:
         logging.error(f"Failed to create Stripe PaymentIntent: {e}")

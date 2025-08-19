@@ -1,7 +1,7 @@
 # tools/create_customer_tool.py
 from langchain_core.tools import tool
 from tools.quickbooks.quickbooks_wrapper import QuickBooksWrapper
-from backend.state.session import set_customer  # ✅ central source of truth
+from backend.state.session import set_customer
 import json
 
 @tool

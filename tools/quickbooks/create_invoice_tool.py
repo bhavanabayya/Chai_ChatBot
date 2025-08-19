@@ -26,6 +26,7 @@ def create_invoice_tool(input_text: str, session_id: str) -> str:
     logging.info(f"Customer_id in create_invoice_tool.py: {customer_id}")
     
     
+    logging.info(f"create_invoice_tool.py --- input_text: {input_text}")
 
     item_matches = re.findall(r"(\d+)\s+([a-zA-Z\s]+?)(?:,|and|for|$)", input_text, re.IGNORECASE)
     if not item_matches:
@@ -37,6 +38,8 @@ def create_invoice_tool(input_text: str, session_id: str) -> str:
         "madras coffee": ("19", 20),
         "masala chai": ("21", 20),
     }
+    
+    logging.info(f"create_invoice_tool.py --- item_matches: {item_matches}")
 
     line_items = []
     for i, (qty, name) in enumerate(item_matches, start=1):
@@ -59,7 +62,7 @@ def create_invoice_tool(input_text: str, session_id: str) -> str:
             "Amount": int(qty) * price,
             "Id": str(i)
         })
-    logging.info(f"Line items: {line_items}")
+    logging.info(f"create_invoice_tool.py --- Line items: {line_items}")
 
     qb = QuickBooksWrapper() 
     invoice = qb.create_invoice(customer_id, line_items)

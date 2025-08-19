@@ -146,10 +146,29 @@ async def websocket_endpoint(ws: WebSocket, session_id: str):
 
     await ws.accept()
     set_websocket(session_id, ws)
+    
     try:
         while True:
             data = await ws.receive_json()
-            print(f"Message from {session_id}: {data}")
+            print(f"Websocket --- Message from {session_id}: {data}")
+            
+            if data.get("event") == "payment_complete":
+                #
+                #   TODO: Actually make sure it is paid
+                #
+                logging.info(f"main.py --- Payment complete for session: {session_id}")
+                
+                memory = get_memory_for_session(session_id)
+
+                agent_executor = create_agent(memory)
+
+                response = await agent_executor.ainvoke({"input": "The payment has been verified. Please move on to shipping."})
+                
+                logging.info(f"main.py --- Sending response back after payment: {response.get("output")}")
+                await ws.send_json({
+                    "type": "agent_message",
+                    "ai_message": response.get("output")
+                })
     except Exception:
         set_websocket(session_id, None)
         
@@ -164,37 +183,37 @@ def create_agent(memory: ConversationBufferMemory) -> AgentExecutor:
         openai_api_key=OPENAI_API_KEY,
     )
 
-    
+
     SYSTEM_PROMPT = """
     You are a friendly and helpful AI assistant for an e-commerce business called Chai Corner.
     Your goal is to help customers find products, add them to a cart, and complete their purchase.
-    Be conversational and guide the user step-by-step. Do not make up product IDs or prices. Only use the information provided by the tools.
+    Be conversational and guide the user step-by-step. Do not make up product IDs or prices. Only use the information provided by the tools. Do not use markdown (ie. ** to bold) at any point in this conversation.
 
     Here are the tools you have access to:
     {{tools}}
 
     Follow this process:
-    1. Greet the user and ask for their full name (e.g., "John Doe").
-    2. Use the validate_customer_tool immediately to check if the customer exists using DisplayName in QuickBooks.
-         - If the customer exists, greet them with "Welcome back, [name]!" and continue.
-         - If the customer does not exist, ask: 
-            “I couldn’t find your profile. Would you like to continue as a guest, or create your own profile?”
-                - If yes to guest, create a guest profile using create_guest_tool and let them know: "Nice to meet you! We've created a guest profile for now."
-                - If yes to create profile, prompt the user to provide:
-                    - First name
-                    - Last name
-                    - Phone number
-                    - Email address
-                    - Shipping address (street, city, state, postal code)
-                  Then call create_customer_tool with these details and strictly respond with: "Nice to meet you! Your profile has been created successfully."
-                - If the user declines both options, politely explain that a profile is required to proceed and ask them to choose either guest or create profile again.
-    3. If the user asks about products, use products_tool.
-    4. Use the cart tools when user wants to add or remove items from their order, view cart and clear cart.
-    5. Generate an invoice using create_invoice_tool. Send the link to the customer. Let the Customer verify that everything is correct.
-    6. If the user wants to proceed, you must use `view_cart` tool and `generate_summary` tool to provide cart_items to `trigger_payment_tool` tool.
-    7. Once Payment is complete, use `create_fedex_shipment` tool and return the details of the shipment. 
-    7. (Mandatory) DO NOT forget to ask if and only if the customer was initially added as a guest:
-        - Only ask: "Would you like to save your profile for future orders?" 
+    1. Greet the user. Ask for their full name if they are a returning customer (e.g., "John Doe"), or if they'd like to continue as guest.
+        - If the customer provides their name, use the validate_customer_tool immediately to check if the customer exists using DisplayName in QuickBooks.
+            - If the customer exists, greet them with "Welcome back, [name]!" and continue.
+            - If the customer does not exist, ask: 
+                “I couldn’t find your profile. Would you like to continue as a guest, or create your own profile?”
+                    - If yes to create profile, prompt the user to provide:
+                        - First name
+                        - Last name
+                        - Phone number
+                        - Email address
+                        - Shipping address (street, city, state, postal code)
+                    Then call create_customer_tool with these details and strictly respond with: "Nice to meet you! Your profile has been created successfully."
+        - If the user chooses to continue as guest, create a guest profile using `create_guest_tool`, and let them know: "Nice to meet you! We've created a guest profile for now."
+    2. If the user asks about products, use `products_tool`. 
+    3. When adding items to the cart, use `products_tool` to make sure they are a valid item and then add to cart using `add_to_cart` tool. Use the other cart tools to remove items, view cart and clear cart.
+    4. Generate an invoice using create_invoice_tool. Send the link to the customer. Let the Customer verify that everything is correct.
+    5. If the user wants to proceed, you must use `view_cart` tool and `generate_summary` tool to provide cart_items to `trigger_payment_tool` tool.
+    6. Use `stripe_checkout_status_tool` tool to see if payment has been made. Do not move on to the next step until the payment has been made.
+    7. Once Payment is complete, use `create_fedex_shipment` tool and return the tracking ID and the link to the shipping label. 
+    8. (Mandatory) DO NOT forget to ask if and only if the customer was initially added as a guest:
+        - Only ask: "Would you like to save your profile for future orders?"
         - If they say yes:
             1) Prompt the user to provide their full details:
                 - First name
@@ -214,6 +233,9 @@ def create_agent(memory: ConversationBufferMemory) -> AgentExecutor:
         - Only ask the save-profile question if and only if the latest client state says is_guest == True (passed via the input string).
              """
 
+
+                        # - Phone number
+                        # - Email address
     # 6. ONLY AFTER the customer confirms the invoice is correct and wants to proceed to payment, you MUST provide BOTH payment options:
     #    - FIRST: Use get_products to get the correct prices, then calculate the total amount
     #    - SECOND: Use create_order tool to generate a PayPal payment link with the calculated total amount, then save_order_id to save the PayPal order ID

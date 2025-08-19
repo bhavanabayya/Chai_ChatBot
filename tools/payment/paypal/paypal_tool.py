@@ -8,7 +8,7 @@ from langchain.agents import Tool
 from langchain_core.tools import tool
 from dotenv import load_dotenv
 
-from backend.state.session import set_order_id, get_order_id
+from backend.state.session import set_paypal_order_id, get_paypal_order_id
 from backend.token_service import get_token_for_provider, refresh_token_for_provider
 from paypal_agent_toolkit.langchain.toolkit import PayPalToolkit
 from paypal_agent_toolkit.shared.configuration import Configuration, Context

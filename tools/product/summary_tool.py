@@ -24,7 +24,7 @@ def generate_summary(order_text: str) -> str:
             quantity = int(match) if match else 1
             subtotal = quantity * price
             total += subtotal
-            summary_lines.append(f"{quantity} x {item.title()} - ${subtotal:.2f}")
+            summary_lines.append(f"{quantity} {item.title()} - ${subtotal:.2f}")
 
     if not summary_lines:
         return "Sorry, I couldn't detect any valid items in your order."

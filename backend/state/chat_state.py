@@ -5,14 +5,16 @@ class ChatState:
         self.is_guest = False
         self.cart = {}
         self.websocket = None
-        self.order_id = None
+        self.stripe_order_id = None
+        self.paypal_order_id = None
 
     def reset(self):
         self.customer_id = None
         self.is_guest = False
         self.cart = {}
         self.websocket = None
-        self.order_id = None
+        self.stripe_order_id = None
+        self.paypal_order_id = None
         
     def to_dict(self):
         return {
@@ -20,7 +22,8 @@ class ChatState:
             "is_guest": self.is_guest,
             "cart": self.cart,
             "websocket": self.websocket,
-            "order_id": self.order_id
+            "stripe_order_id": self.stripe_order_id,
+            "paypal_order_id": self.paypal_order_id
         }
 
     @classmethod
@@ -30,5 +33,6 @@ class ChatState:
         instance.is_guest = bool(data.get("is_guest", False))
         instance.cart = data.get("cart")
         instance.websocket = data.get("websocket")
-        instance.order_id = data.get("order_id")
+        instance.stripe_order_id = data.get("stripe_order_id")
+        instance.paypal_order_id = data.get("paypal_order_id")
         return instance

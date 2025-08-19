@@ -15,7 +15,7 @@ class InvoiceRequest(BaseModel):
 def create_invoice(req: InvoiceRequest):
     try:
         # Create a prompt for create_invoice_tool if it expects text
-        items_text = ", ".join([f"{i.quantity}x {i.name}" for i in req.items])
+        items_text = ", ".join([f"{i.quantity} {i.name}" for i in req.items])
         prompt = f"{items_text}"
         # prompt = f"Create invoice for customer {req.customer_id} with items: {items_text}."
         if req.note: prompt += f" Note: {req.note}."

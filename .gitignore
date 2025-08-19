@@ -1,7 +1,6 @@
 # Project specific
 invoice_*.pdf
 .tokens.json
-backend/.tokens.json
 
 # --- Python Stuffs ---
 # Byte-compiled / optimized / C extensions
@@ -27,7 +26,6 @@ env/
 venv/
 
 # --- LangChain & AI Specific ---
-# Environment variables - DO NOT COMMIT YOUR API KEYS! 🔑
 .env*
 !/.env.example
 
