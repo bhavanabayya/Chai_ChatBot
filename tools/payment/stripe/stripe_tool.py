@@ -28,10 +28,10 @@ def stripe_checkout_status_tool(session_id: str) -> str:
         order_id = get_stripe_order_id(session_id)
         order = stripe.checkout.Session.retrieve(order_id)
         return (
-            f"Checkout Session '{order.id}' status: \n"
-            f"  - Payment Status: {order.payment_status}\n"
-            f"  - Session Status: {order.status}\n"
-            f"  - Customer Email: {order.customer_details.email if order.customer_details else 'N/A'}"
+            # f"Checkout Session '{order.id}' status: \n"
+            f"Payment Status: {order.payment_status}."
+            # f"  - Session Status: {order.status}\n"
+            # f"  - Customer Email: {order.customer_details.email if order.customer_details else 'N/A'}"
         )
     except stripe.error.StripeError as e:
         return f"Error retrieving checkout session: {str(e)}"
