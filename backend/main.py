@@ -14,14 +14,14 @@ from langchain.memory import ConversationBufferMemory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # Routers
-from backend.routers.fedex import router as fedex_router
-from backend.routers.paypal import router as paypal_router
-from backend.routers.quickbooks import router as quickbooks_router
-from backend.routers.customer import router as customer_router
-from backend.routers.applepay import router as applepay_router
+from routers.fedex import router as fedex_router
+from routers.paypal import router as paypal_router
+from routers.quickbooks import router as quickbooks_router
+from routers.customer import router as customer_router
+from routers.applepay import router as applepay_router
 
 # Tools & SDKs
-from backend.state.session import set_websocket
+from state.session import set_websocket
 from tools.tool_config import get_all_tools
 from tools.quickbooks.quickbooks_wrapper import QuickBooksWrapper
 
@@ -59,6 +59,7 @@ origins = [
     "http://localhost:8080",
     "http://localhost:5173",
     "http://127.0.0.1:8080",
+    "http://10.0.0.106:8080",
 ]
 
 app.add_middleware(
@@ -274,7 +275,7 @@ def create_agent(memory: ConversationBufferMemory) -> AgentExecutor:
 class ChatRequest(BaseModel):
     message: str
     session_id: str
-
+    
 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):

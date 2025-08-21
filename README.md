@@ -54,7 +54,7 @@ uvicorn backend.main:app --reload --port 8001
 ## 5. Launch the Frontend
 
 ```bash
-streamlit run frontend/app.py
+npm run dev
 ```
 
 ---

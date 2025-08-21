@@ -44,6 +44,11 @@ vector_stores/
 # Log files
 *.log
 logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 # Large data files (consider using Git LFS for these instead)
 # data/
@@ -66,3 +71,19 @@ logs/
 .tox/
 .coverage
 htmlcov/
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
