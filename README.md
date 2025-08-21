@@ -1,7 +1,7 @@
 
 # Project Setup & Token Management Guide
 
-## 1. Create & Activate Virtual Environment
+## 1. Create & Activate Virtual Environment (Note: Navigate to the "backend" folder)
 
 ```bash
 python -m venv .venv
@@ -41,17 +41,25 @@ python qb_refresh_smoketest.py
 
 Run the **token service**:
 ```bash
-uvicorn backend.token_service:app --reload --port 8000
+uvicorn token_service:app --reload --port 8000
 ```
 
 Run the **main chatbot backend**:
 ```bash
-uvicorn backend.main:app --reload --port 8001
+uvicorn main:app --reload --port 8001
 ```
 
 ---
 
-## 5. Launch the Frontend
+## 5. Install Dependencies
+
+```bash
+npm install
+```
+
+---
+
+## 6. Launch the Frontend (Note: Navigate to the "frontend" folder)
 
 ```bash
 npm run dev
@@ -59,9 +67,9 @@ npm run dev
 
 ---
 
-## 6. Token Management (QuickBooks)
+## 7. Token Management (QuickBooks)
 
-The code in the `chatbot_fastapi_tools_tokens` branch uses `token_service.py`, a FastAPI microservice, to manage and refresh QuickBooks API tokens.
+The code uses `token_service.py`, a FastAPI microservice, to manage and refresh QuickBooks API tokens.
 
 - When the `access_token` (valid for 1 hour) expires, the backend automatically detects a `401 Unauthorized` response and triggers a refresh by calling the `/token/refresh` endpoint on `http://localhost:8000`.
 - This uses the `refresh_token` (valid for 100 days) to get a new access token from Intuit's servers.
@@ -82,7 +90,7 @@ If the refresh token itself expires (rare, after long inactivity), a manual re-a
 
 ---
 
-## 7. How to Reset Tokens
+## 8. How to Reset Tokens
 
 - Delete the `.tokens.json` file:
 ```bash
@@ -174,7 +182,7 @@ curl -X POST http://localhost:8000/api/token/quickbooks/refresh
 
 ---
 
-## 8. Deactivating the Environment
+## 9. Deactivating the Environment
 
 When you are finished working on the project, you can deactivate the environment and return to your global Python context by simply running:
 ```bash
@@ -183,7 +191,7 @@ deactivate
 
 ---
 
-## 9. Error Handling Tips
+## 10. Error Handling Tips
 
 | Error | Cause | Solution |
 |-------|-------|----------|
@@ -194,7 +202,7 @@ deactivate
 
 ---
 
-## 10. Environment Variables (`.env`)
+## 11. Environment Variables (`.env`)
 
 Your `.env` file must include:
 ```env
