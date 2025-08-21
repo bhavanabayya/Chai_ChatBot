@@ -1,25 +1,31 @@
+# 🍵 Chai Chatbot – Setup & Token Management
 
-# Project Setup & Token Management Guide
+This guide explains how to set up the environment, run the backend/frontend, and manage QuickBooks tokens with the **token service**.
 
-## 1. Create & Activate Virtual Environment (Note: Navigate to the "backend" folder)
+---
+
+## 1. Virtual Environment (Backend)
+
+From the **`backend`** folder:
 
 ```bash
 python -m venv .venv
 ```
 
-- On **Windows (PowerShell)**:
-```powershell
-.venv\Scripts\Activate.ps1
-```
+Activate:
 
-- On **macOS/Linux**:
-```bash
-source .venv/bin/activate
-```
+- **Windows (PowerShell)**  
+  ```powershell
+  .venv\Scripts\Activate.ps1
+  ```
+- **macOS/Linux**  
+  ```bash
+  source .venv/bin/activate
+  ```
 
 ---
 
-## 2. Install Dependencies
+## 2. Install Dependencies (Backend)
 
 ```bash
 pip install -r requirements.txt
@@ -27,191 +33,140 @@ pip install -r requirements.txt
 
 ---
 
-## 3. QuickBooks Token Smoke Test
+## 3. QuickBooks Token Service
 
-This step is meant as a sanity check to see if your QuickBooks token refresh flow is actually working before you run the full chatbot.
+A FastAPI microservice (`token_service.py`) manages QuickBooks tokens.
 
+### Start the Token Service
 ```bash
-python qb_refresh_smoketest.py
-```
-
----
-
-## 4. Start the Backend
-
-Run the **token service**:
-```bash
+cd backend
 uvicorn token_service:app --reload --port 8000
 ```
 
-Run the **main chatbot backend**:
+### Authorize QuickBooks (First-Time Setup or Expired Refresh Token)
+
+1. Get authorize URL:  
+   ```bash
+   curl http://127.0.0.1:8000/api/token/quickbooks/authorize
+   ```
+   Open the returned `authorize_url` in a browser.
+
+2. Log in to QuickBooks Sandbox and approve the app.  
+   You’ll be redirected to:
+   ```
+   http://localhost:8000/api/token/quickbooks/callback?code=...&state=xyz&realmId=...
+   ```
+
+3. The service exchanges the code and writes tokens to:
+   ```
+   backend/.tokens.json
+   ```
+
+4. Verify:  
+   ```bash
+   curl http://127.0.0.1:8000/api/token/quickbooks
+   ```
+
+### Refresh Tokens
+
+- Access tokens expire every hour.  
+- The backend automatically refreshes using the stored refresh token (~100 days).  
+- If the refresh token expires → delete `.tokens.json` and re-authorize.
+
+---
+
+## 4. Main Backend
+
+Run in a separate terminal:
+
 ```bash
+cd backend
 uvicorn main:app --reload --port 8001
 ```
 
 ---
 
-## 5. Install Dependencies
+## 5. Frontend
+
+From the **`frontend`** folder:
 
 ```bash
 npm install
-```
-
----
-
-## 6. Launch the Frontend (Note: Navigate to the "frontend" folder)
-
-```bash
 npm run dev
 ```
 
 ---
 
-## 7. Token Management (QuickBooks)
+## 6. Environment Files
 
-The code uses `token_service.py`, a FastAPI microservice, to manage and refresh QuickBooks API tokens.
+Keep **two separate `.env` files**:
 
-- When the `access_token` (valid for 1 hour) expires, the backend automatically detects a `401 Unauthorized` response and triggers a refresh by calling the `/token/refresh` endpoint on `http://localhost:8000`.
-- This uses the `refresh_token` (valid for 100 days) to get a new access token from Intuit's servers.
+### `frontend/.env`
+For browser-safe keys (Vite requires `VITE_` prefix):
 
-### To view the latest tokens:
-```bash
-curl http://localhost:8000/token
+```env
+VITE_PAYPAL_CLIENT_ID=your_paypal_client_id
+VITE_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
+
+VITE_BACKEND_URL=http://127.0.0.1:8001
 ```
 
-This will return the current `access_token` and `refresh_token` in JSON format.
+---
 
-Make sure `token_service.py` is running locally using:
-```bash
-uvicorn backend.token_service:app --reload --port 8000
+### `backend/.env`
+For secrets (FastAPI only):
+
+```env
+# URLs / CORS
+BACKEND_URL=http://127.0.0.1:8001
+FRONTEND_URL=http://127.0.0.1:5173
+CORS_ALLOW_ORIGINS=http://127.0.0.1:5173
+
+# OpenAI
+OPENAI_API_KEY=sk-...
+OPENAI_API_MODEL=gpt-4o-mini
+
+# QuickBooks
+QB_CLIENT_ID=...
+QB_CLIENT_SECRET=...
+QB_REDIRECT_URI=http://127.0.0.1:8000/api/token/quickbooks/callback
+QB_ENVIRONMENT=sandbox
+
+# PayPal
+PAYPAL_CLIENT_ID=...
+PAYPAL_CLIENT_SECRET=...
+
+# Stripe
+STRIPE_SECRET_KEY=sk_test_...
+
+# FedEx (if used)
+FEDEX_CLIENT_ID=...
+FEDEX_CLIENT_SECRET=...
+FEDEX_ACCOUNT_NUMBER=...
+
+# Optional
+QB_MINOR_VERSION=75
 ```
 
-If the refresh token itself expires (rare, after long inactivity), a manual re-authentication via browser is required to obtain new credentials.
+ **Do not** put `QB_ACCESS_TOKEN` or `QB_REFRESH_TOKEN` in `.env` → they are stored in `backend/.tokens.json`.
 
 ---
 
-## 8. How to Reset Tokens
+## 7. Common Errors
 
-- Delete the `.tokens.json` file:
-```bash
-# Linux/Mac
-rm backend/.tokens.json
-
-# Windows
-del backend\.tokens.json
-```
-
-- Restart the token service:
-```bash
-uvicorn backend.token_service:app --reload --port 8000
-```
-## 1) Remove any stale token file
-*Windows (PowerShell)*:
-powershell
-del backend\.tokens.json -ErrorAction Ignore
-
-*Mac/Linux*:
-bash
-rm -f backend/.tokens.json
-
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `401 Unauthorized` | Expired access token | Auto-refreshes, or call `/refresh` |
+| `invalid_grant` | Refresh token expired | Delete `.tokens.json` and re-authorize |
+| `connection refused` | Token service not running | Start with `uvicorn token_service:app` |
+| `file not found` | `.tokens.json` missing | Run authorize flow again |
 
 ---
 
-## 2) Start the Token Service
-bash
-uvicorn backend.token_service:app --reload --port 8000
+## 8. Shut Down
 
+When finished:
 
-Keep this window running.
-
----
-
-## 3) Get new tokens (programmatic, reliable)
-
-### 3.1 Get the authorize URL
-bash
-curl http://localhost:8000/api/token/quickbooks/authorize
-
-Copy the value of authorize_url from the JSON and open it in a browser.
-
-### 3.2 Approve in Intuit & capture the code
-After login & consent you’ll be redirected to a URL like:
-
-http://localhost:8000/api/token/quickbooks/callback?code=ABCD1234XYZ&state=xyz&realmId=934145507451467
-
-Copy *only* the value after code= and *stop before* &state.
-Example code: ABCD1234XYZ
-
-### 3.3 Exchange the code for tokens
-*Windows (PowerShell)*:
-powershell
-$code = "ABCD1234XYZ"
-$body = @{ code = $code } | ConvertTo-Json
-Invoke-RestMethod `
-  -Method POST `
-  -Uri "http://localhost:8000/api/token/quickbooks/exchange" `
-  -ContentType "application/json" `
-  -Body $body
-
-*Mac/Linux (curl)*:
-bash
-curl -X POST "http://localhost:8000/api/token/quickbooks/exchange"   -H "Content-Type: application/json"   -d '{"code":"ABCD1234XYZ"}'
-
-
-Result: the service writes fresh tokens to backend/.tokens.json:
-json
-{
-  "quickbooks": {
-    "access_token": "...",
-    "refresh_token": "...",
-    "expires_at": 1723549872,
-    "realm_id": "934145507451467"
-  }
-}
-
-
----
-
-## 4) (Optional) Force a refresh later
-bash
-curl -X POST http://localhost:8000/api/token/quickbooks/refresh
-
-
----
-- Re-run the **Authorize** → **Exchange** steps.
-
----
-
-## 9. Deactivating the Environment
-
-When you are finished working on the project, you can deactivate the environment and return to your global Python context by simply running:
 ```bash
 deactivate
 ```
-
----
-
-## 10. Error Handling Tips
-
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `401 Unauthorized` | Expired access token | Ensure token service is running; it should refresh automatically |
-| `invalid_grant` | Expired/invalid refresh token | Delete `.tokens.json` and re-authorize |
-| `connection refused` | Token service not running | Start it with `uvicorn backend.token_service:app --reload --port 8000` |
-| `file not found` | `.tokens.json` missing | Re-run the authorization flow |
-
----
-
-## 11. Environment Variables (`.env`)
-
-Your `.env` file must include:
-```env
-QUICKBOOKS_CLIENT_ID=your_client_id
-QUICKBOOKS_CLIENT_SECRET=your_client_secret
-QUICKBOOKS_REDIRECT_URI=http://localhost:8000/api/token/quickbooks/callback
-QUICKBOOKS_ENVIRONMENT=sandbox
-```
-
----
-
-**Now you are ready to run the chatbot with automatic QuickBooks token refresh!**

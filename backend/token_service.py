@@ -11,6 +11,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from urllib.parse import unquote
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Env + paths
@@ -189,6 +191,51 @@ def qb_exchange_code(payload: QBCodeExchangeRequest) -> Dict[str, Any]:
     if resp.status_code != 200:
         raise HTTPException(status_code=500, detail=f"QuickBooks code exchange failed: {resp.text}")
     return _persist_qb_tokens_from_oauth(resp.json())
+
+@app.get("/api/token/quickbooks/callback", response_class=HTMLResponse)
+def qb_callback(code: Optional[str] = None, state: Optional[str] = None, realmId: Optional[str] = None):
+    """
+    Handles Intuit's redirect:
+      /api/token/quickbooks/callback?code=...&state=...&realmId=...
+    Exchanges the code for tokens and persists them. Returns a tiny success page.
+    """
+    if not code:
+        # Useful error page when someone hits the callback without a code
+        return HTMLResponse(
+            '<h3 style="font-family: sans-serif">QuickBooks: missing <code>code</code> in callback.</h3>',
+            status_code=400,
+        )
+
+    # Some browsers / intermediaries can URL-encode the value; be defensive
+    code = unquote(code).strip()
+
+    try:
+        # Reuse your existing exchange logic (this persists tokens to .tokens.json)
+        qb_exchange_code(QBCodeExchangeRequest(code=code))
+    except HTTPException as e:
+        return HTMLResponse(
+            f"<h3 style='font-family: sans-serif'>Code exchange failed</h3>"
+            f"<pre>{e.detail}</pre>",
+            status_code=400,
+        )
+
+    # Small success page (safe to close)
+    return HTMLResponse(
+        """
+        <html>
+          <head><meta charset="utf-8" /></head>
+          <body style="font-family: system-ui, sans-serif; padding: 24px;">
+            <h2>QuickBooks connected ✅</h2>
+            <p>Tokens saved. You can close this tab and return to the app.</p>
+            <script>
+              // Close the window if this was a popup
+              setTimeout(() => { window.close(); }, 800);
+            </script>
+          </body>
+        </html>
+        """,
+        status_code=200,
+    )
 
 # Bootstrap once from .env if provided
 def _bootstrap_from_env_if_empty() -> None:
