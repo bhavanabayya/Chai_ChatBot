@@ -9,12 +9,26 @@ export const ChatWindow = ({ messages }: ChatWindowProps) => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+            console.debug("ChatWindow: Scrolled to bottom.");
+        } else {
+            console.warn("ChatWindow: messagesEndRef is not attached. Cannot scroll.");
+        }
     };
 
     useEffect(() => {
+        console.info("ChatWindow: Messages array updated. Triggering scroll.");
         scrollToBottom();
     }, [messages]);
+
+    // Log the initial render of the component
+    useEffect(() => {
+        console.info("ChatWindow component mounted.");
+        return () => {
+            console.info("ChatWindow component unmounted.");
+        };
+    }, []);
 
     return (
         <div className="flex-1 overflow-y-auto px-4 py-6 bg-chat-bg">

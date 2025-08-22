@@ -1,5 +1,7 @@
 import os
 import io
+import sys
+import logging
 from pathlib import Path
 import requests
 from fastapi import FastAPI, WebSocket
@@ -26,15 +28,15 @@ from tools.tool_config import get_all_tools
 from tools.quickbooks.quickbooks_wrapper import QuickBooksWrapper
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Logging. TODO: Disable in prod :)
+# Set up logging for the application
 # ──────────────────────────────────────────────────────────────────────────────
-import sys
-import logging
+logger = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, # Set the lowest level of message to display
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     stream=sys.stdout, # Ensure logs go to the terminal
 )
+logger.info("Chai Corner Backend starting up...")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Environment
@@ -46,7 +48,10 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_MODEL = os.getenv("OPENAI_API_MODEL") or "gpt-4o-mini"  # safe default
 
 if not OPENAI_API_KEY:
+    logger.critical("Missing OPENAI_API_KEY in environment. Shutting down.")
     raise RuntimeError("Missing OPENAI_API_KEY in environment.")
+else:
+    logger.info("OpenAI API key loaded.")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI app
@@ -71,11 +76,17 @@ app.add_middleware(
 )
 
 # Initialize SDK wrappers once
-qb = QuickBooksWrapper()
+try:
+    qb = QuickBooksWrapper()
+    logger.info("QuickBooksWrapper initialized successfully.")
+except Exception as e:
+    logger.error(f"Failed to initialize QuickBooksWrapper: {e}", exc_info=True)
+    qb = None
 
 # Health
 @app.get("/health")
 def health():
+    logger.info("Health check endpoint called.")
     return {"status": "ok"}
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -84,14 +95,21 @@ def health():
 @app.get("/download/invoice/{invoice_id}")
 def download_invoice(invoice_id: str):
     """Stream a QuickBooks invoice PDF by invoice_id."""
+    logger.info(f"Received request to download invoice: {invoice_id}")
+    if not qb:
+        logger.error("QuickBooksWrapper is not initialized. Cannot download invoice.")
+        return JSONResponse(status_code=500, content={"error": "Internal service error. QuickBooks not configured."})
+        
     try:
         pdf_bytes = qb.get_invoice_pdf(invoice_id)
+        logger.info(f"Successfully retrieved PDF for invoice: {invoice_id}")
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
             media_type="application/pdf",
             headers={"Content-Disposition": f"attachment; filename=invoice_{invoice_id}.pdf"},
         )
     except Exception as e:
+        logger.error(f"Failed to download invoice {invoice_id}. Error: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/download/label/{tracking_number}")
@@ -100,20 +118,24 @@ def download_label(tracking_number: str):
     Streams the FedEx label PDF given a tracking number.
     NOTE: Replace the URL logic with your persisted label lookup if available.
     """
+    logger.info(f"Received request to download FedEx label for tracking number: {tracking_number}")
     try:
         label_url = f"https://www.fedex.com/label/{tracking_number}.pdf"
         resp = requests.get(label_url, timeout=20)
         if resp.status_code != 200:
+            logger.error(f"Failed to fetch label from FedEx. Status code: {resp.status_code}")
             return JSONResponse(
                 status_code=resp.status_code,
                 content={"error": f"Failed to fetch label: {resp.status_code}"},
             )
+        logger.info("Successfully fetched FedEx label.")
         return StreamingResponse(
             io.BytesIO(resp.content),
             media_type="application/pdf",
             headers={"Content-Disposition": f"attachment; filename=label_{tracking_number}.pdf"},
         )
     except Exception as e:
+        logger.error(f"An error occurred while downloading label: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -129,7 +151,7 @@ session_memories = {}
 def get_memory_for_session(session_id: str) -> ConversationBufferMemory:
     """Retrieves or creates a memory object for a given session ID."""
     if session_id not in session_memories:
-        # Ensure new memory objects are created with the correct configuration
+        logger.info(f"No memory found for session {session_id}. Creating a new one.")
         session_memories[session_id] = ConversationBufferMemory(
             memory_key="chat_history",
             return_messages=True
@@ -138,12 +160,9 @@ def get_memory_for_session(session_id: str) -> ConversationBufferMemory:
     return session_memories[session_id]
 
 
-
-
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(ws: WebSocket, session_id: str):
-    # TODO: Remove later
-    logging.info(f"Session_id in main.websocket_endpoint: {session_id}")
+    logger.info(f"New WebSocket connection established for session ID: {session_id}")
 
     await ws.accept()
     set_websocket(session_id, ws)
@@ -151,40 +170,35 @@ async def websocket_endpoint(ws: WebSocket, session_id: str):
     try:
         while True:
             data = await ws.receive_json()
-            print(f"Websocket --- Message from {session_id}: {data}")
+            logger.info(f"Websocket: Message from {session_id}: {data}")
             
             if data.get("event") == "payment_complete":
-                #
-                #   TODO: Actually make sure it is paid
-                #
-                logging.info(f"main.py --- Payment complete for session: {session_id}")
+                logging.info(f"Payment complete event received for session: {session_id}")
                 
                 memory = get_memory_for_session(session_id)
-
                 agent_executor = create_agent(memory)
-
                 response = await agent_executor.ainvoke({"input": "The payment has been verified. Please move on to shipping."})
                 
-                logging.info(f"main.py --- Sending response back after payment: {response.get("output")}")
+                logging.info(f"Sending response back after payment: {response.get('output')}")
                 await ws.send_json({
                     "type": "agent_message",
                     "ai_message": response.get("output")
                 })
-    except Exception:
+    except Exception as e:
+        logger.error(f"WebSocket connection closed for session {session_id}. Error: {e}", exc_info=True)
         set_websocket(session_id, None)
-        
 
 def create_agent(memory: ConversationBufferMemory) -> AgentExecutor:
     """Create and return the LangChain tool-calling agent executor."""
     tools = get_all_tools()
+    logger.debug(f"Loaded {len(tools)} tools for the agent.")
 
     llm = ChatOpenAI(
         model=OPENAI_API_MODEL,
         temperature=0,
         openai_api_key=OPENAI_API_KEY,
     )
-
-
+    
     SYSTEM_PROMPT = """
         You are a friendly and helpful AI assistant for an e-commerce business called Chai Corner.
         Your goal is to help customers find products, add them to a cart, and complete their purchase.
@@ -227,27 +241,6 @@ def create_agent(memory: ConversationBufferMemory) -> AgentExecutor:
             - Only ask the save-profile question if and only if the latest client state says is_guest == True (passed via the input string).
     """
 
-
-                        # - Phone number
-                        # - Email address
-    # 6. ONLY AFTER the customer confirms the invoice is correct and wants to proceed to payment, you MUST provide BOTH payment options:
-    #    - FIRST: Use get_products to get the correct prices, then calculate the total amount
-    #    - SECOND: Use create_order tool to generate a PayPal payment link with the calculated total amount, then save_order_id to save the PayPal order ID
-    #    - THIRD: Use generate_apple_pay_link tool to generate an Apple Pay (Stripe) payment link with the same calculated total amount
-    #    - Present both options clearly showing different URLs:
-    #      "Here are your payment options:
-    #      1. **[Pay with PayPal](PayPal_URL_from_create_order)**
-    #      2. **[Pay with Apple Pay](Stripe_URL_from_generate_apple_pay_link)**"
-    
-    # 7. When checking payment status:
-    #    - Check BOTH methods in the same turn:
-    #         (a) PayPal: call get_order_id and then get_order_details or capture_order to confirm status.
-    #         (b) Apple Pay: call get_apple_pay_session_status with the session_id from the last generated Stripe link.
-    #    - If PayPal status is "APPROVED" or "COMPLETED", use create_fedex_shipment and respond with: "✅ Payment received via PayPal! 📦 Shipment has been successfully created! Here are the details:"
-    #    - If Apple Pay shows "complete" and "paid" status, use create_fedex_shipment and respond with: "✅ Payment received via Apple Pay! 📦 Shipment has been successfully created! Here are the details:"
-    #    - NEVER guess or assume the payment method - ALWAYS use the tools
-    #    - MANDATORY: Use the actual tool results to determine payment method, not memory or assumptions
-
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", SYSTEM_PROMPT),
@@ -256,8 +249,8 @@ def create_agent(memory: ConversationBufferMemory) -> AgentExecutor:
             MessagesPlaceholder(variable_name="agent_scratchpad"),
         ]
     )
-
     agent = create_tool_calling_agent(llm, tools, prompt)
+    logger.info("LangChain agent created.")
 
     return AgentExecutor(
         agent=agent,
@@ -266,7 +259,6 @@ def create_agent(memory: ConversationBufferMemory) -> AgentExecutor:
         verbose=True,
         handle_parsing_errors=True,
     )
-    
     
 # ──────────────────────────────────────────────────────────────────────────────
 # Main chat endpoint
@@ -285,21 +277,20 @@ async def chat_endpoint(request: ChatRequest):
     """
     try:
         session_id = request.session_id
+        logger.info(f"Received chat request for session ID: {session_id}")
         
         memory = get_memory_for_session(session_id)
         
-        # TODO: Remove later
-        logging.info(f"Session_id in main.chat_endpoint: {session_id}")
-
         agent_executor = create_agent(memory)
 
         response = await agent_executor.ainvoke({"input": request.message})
+        logger.info(f"Agent response for session {session_id} is ready.")
 
         return {"response": response.get("output")}
 
     except Exception as e:
-        print(f"An error occurred in chat endpoint: {e}")
-        return {"error": "An internal server error occurred."}
+        logger.error(f"An error occurred in chat endpoint for session {session_id}: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"error": "An internal server error occurred."})
 
 
 

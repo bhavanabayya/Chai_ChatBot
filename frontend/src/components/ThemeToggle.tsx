@@ -1,12 +1,15 @@
 import { useTheme } from "next-themes";
 import { Switch } from "@/components/ui/switch";
 import { Sun, Moon } from "lucide-react";
+import React from "react";
 
 export const ThemeToggle = () => {
   const { theme, setTheme } = useTheme();
 
   const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
+    const newTheme = theme === "dark" ? "light" : "dark";
+    setTheme(newTheme);
+    console.info(`Theme toggled to '${newTheme}'.`);
   };
 
   return (

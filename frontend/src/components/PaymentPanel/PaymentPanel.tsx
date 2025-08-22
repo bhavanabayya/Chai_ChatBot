@@ -6,8 +6,11 @@ import './Payment.css';
 import { PayPalButtons, PayPalScriptProvider } from '@paypal/react-paypal-js';
 import { CreateOrderActions, OnApproveActions } from '@paypal/paypal-js';
 
+console.info("Loading PaymentPanel component and Stripe/PayPal libraries...");
+
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string);
-const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID as string
+const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID as string;
+console.info("Stripe promise created. PayPal client ID loaded.");
 
 // Define the type for the component's props
 interface PaymentPanelProps {
@@ -17,24 +20,13 @@ interface PaymentPanelProps {
     paypalOrderId: string,
     socket: WebSocket,
     setMessages: Dispatch<SetStateAction<Message[]>>
-    // sessionId: String
 }
 
 function PaymentPanel({ isOpen, setIsOpen, clientSecret, paypalOrderId, socket, setMessages }: PaymentPanelProps) {
-
-
-    const initialOptions = {
-        "clientId": PAYPAL_CLIENT_ID,
-        "enable-funding": "venmo",
-        "disable-funding": "",
-        "buyer-country": "US",
-        currency: "USD",
-        "data-page-type": "product-details",
-        components: "buttons",
-        "data-sdk-integration-source": "developer-studio",
-    };
-
-    // console.log("Client Secret in PaymentPanel:", clientSecret);
+    
+    // Log component re-renders and prop changes
+    console.debug(`PaymentPanel re-rendered. isOpen: ${isOpen}, clientSecret: ${!!clientSecret}`);
+    
     const [isComplete, setIsComplete] = useState(false);
     const [open, setOpen] = useState(false);
 
@@ -43,14 +35,8 @@ function PaymentPanel({ isOpen, setIsOpen, clientSecret, paypalOrderId, socket, 
         e.stopPropagation();
     };
 
-
-    // useEffect(() => {
-    //     scrollToBottom();
-    // }, [isComplete]);
-
     const handleComplete = useCallback(() => {
-        console.log("payment completed!")
-
+        console.info("Stripe payment completed! Notifying backend.");
         // send a message here (fake AI) that says Please hold on while I confirm your payment was made
 
         const aiMessage: Message = {
@@ -59,20 +45,21 @@ function PaymentPanel({ isOpen, setIsOpen, clientSecret, paypalOrderId, socket, 
             sender: 'assistant',
             timestamp: new Date(),
         };
-        setMessages(prev => [...prev, aiMessage])
-
-        setIsComplete(true)
+        setMessages(prev => [...prev, aiMessage]);
+        
+        setIsComplete(true);
         setIsOpen(false);
 
         if (socket && socket.readyState === WebSocket.OPEN) {
+            console.info("WebSocket is open. Sending 'payment_complete' event.");
             socket.send(JSON.stringify({
-                event: 'payment_complete', // Send the event name as part of the data
+                event: 'payment_complete',
                 status: 'success'
             }));
         } else {
-            console.log("Oh no, socket was closed, payment notification didn't go through")
+            console.error("WebSocket is not open. Payment notification could not be sent to backend.");
         }
-    }, [socket]);
+    }, [socket, setMessages, setIsOpen]);
 
     return (
         <>
@@ -80,7 +67,10 @@ function PaymentPanel({ isOpen, setIsOpen, clientSecret, paypalOrderId, socket, 
             {isOpen && (
                 <div
                     className="panel-backdrop"
-                    onClick={() => (setIsOpen(false))}
+                    onClick={() => {
+                        console.info("Panel backdrop clicked. Closing panel.");
+                        setIsOpen(false);
+                    }}
                 ></div>
             )}
 
@@ -89,14 +79,15 @@ function PaymentPanel({ isOpen, setIsOpen, clientSecret, paypalOrderId, socket, 
                 onClick={handlePanelClick}>
                 <div className="panel-header">
                     <h2>Complete Your Payment</h2>
-                    <button className="close-btn" onClick={() => (setIsOpen(false))}>
+                    <button className="close-btn" onClick={() => {
+                        console.info("Close button clicked. Closing payment panel.");
+                        setIsOpen(false);
+                    }}>
                         &times; {/* A simple 'X' icon */}
                     </button>
                 </div>
 
                 <div className="panel-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
-                {/* <div className="flex-grow p-4 overflow-y-auto min-h-0"> */}
-                    {/* Only render the Stripe Checkout when the clientSecret is available. */}
                     {clientSecret && stripePromise && EmbeddedCheckoutProvider && EmbeddedCheckout ? (
                         <EmbeddedCheckoutProvider
                             key={clientSecret}
@@ -107,6 +98,7 @@ function PaymentPanel({ isOpen, setIsOpen, clientSecret, paypalOrderId, socket, 
                         </EmbeddedCheckoutProvider>
                     ) : (
                         <div className="flex items-center justify-center h-full">
+                            {/* Log when the loading state is shown */}
                             <p>Loading payment options...</p>
                         </div>
                     )}

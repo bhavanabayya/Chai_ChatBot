@@ -1,13 +1,14 @@
-
 import React, { useState } from "react";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
+import type { CreateOrderActions, OnApproveActions } from "@paypal/paypal-js";
 
 // Renders errors or successfull transactions on the screen.
-function Message({ content }) {
+function Message({ content }: { content: string | null }) {
     return <p>{content}</p>;
 }
 
 const PayPal = () => {
+    console.info("Initializing PayPal component.");
 
     const [message, setMessage] = useState("");
     const initialOptions = {
@@ -31,7 +32,8 @@ const PayPal = () => {
                         color: "gold",
                         label: "paypal",
                     }}
-                    createOrder={async () => {
+                    createOrder={async (_data, actions: CreateOrderActions) => {
+                        console.info("createOrder triggered.");
                         try {
                             const response = await fetch("/api/orders", {
                                 method: "POST",
@@ -51,8 +53,10 @@ const PayPal = () => {
                             });
 
                             const orderData = await response.json();
+                            console.debug("Received order data:", orderData);
 
                             if (orderData.id) {
+                                console.info("PayPal order created successfully. ID:", orderData.id);
                                 return orderData.id;
                             } else {
                                 const errorDetail = orderData?.details?.[0];
@@ -60,16 +64,19 @@ const PayPal = () => {
                                     ? `${errorDetail.issue} ${errorDetail.description} (${orderData.debug_id})`
                                     : JSON.stringify(orderData);
 
+                                console.error("Error creating PayPal order:", errorMessage);
                                 throw new Error(errorMessage);
                             }
                         } catch (error) {
-                            console.error(error);
+                            console.error("Could not initiate PayPal Checkout. An exception occurred:", error);
                             setMessage(
                                 `Could not initiate PayPal Checkout...${error}`
                             );
+                            throw error;
                         }
                     }}
-                    onApprove={async (data, actions) => {
+                    onApprove={async (data, actions: OnApproveActions) => {
+                        console.info("onApprove triggered. Capturing order with ID:", data.orderID);
                         try {
                             const response = await fetch(
                                 `/api/orders/${data.orderID}/capture`,
@@ -82,39 +89,29 @@ const PayPal = () => {
                             );
 
                             const orderData = await response.json();
-                            // Three cases to handle:
-                            //   (1) Recoverable INSTRUMENT_DECLINED -> call actions.restart()
-                            //   (2) Other non-recoverable errors -> Show a failure message
-                            //   (3) Successful transaction -> Show confirmation or thank you message
+                            console.debug("Received capture data:", orderData);
 
                             const errorDetail = orderData?.details?.[0];
 
                             if (errorDetail?.issue === "INSTRUMENT_DECLINED") {
-                                // (1) Recoverable INSTRUMENT_DECLINED -> call actions.restart()
-                                // recoverable state, per https://developer.paypal.com/docs/checkout/standard/customize/handle-funding-failures/
+                                console.warn("Payment was declined. Restarting transaction.");
                                 return actions.restart();
                             } else if (errorDetail) {
-                                // (2) Other non-recoverable errors -> Show a failure message
+                                console.error("Non-recoverable error during PayPal capture:", errorDetail);
                                 throw new Error(
                                     `${errorDetail.description} (${orderData.debug_id})`
                                 );
                             } else {
-                                // (3) Successful transaction -> Show confirmation or thank you message
-                                // Or go to another URL:  actions.redirect('thank_you.html');
                                 const transaction =
                                     orderData.purchase_units[0].payments
                                         .captures[0];
+                                console.info("PayPal transaction successful. Status:", transaction.status, "ID:", transaction.id);
                                 setMessage(
                                     `Transaction ${transaction.status}: ${transaction.id}. See console for all available details`
                                 );
-                                console.log(
-                                    "Capture result",
-                                    orderData,
-                                    JSON.stringify(orderData, null, 2)
-                                );
                             }
                         } catch (error) {
-                            console.error(error);
+                            console.error("An error occurred during PayPal capture:", error);
                             setMessage(
                                 `Sorry, your transaction could not be processed...${error}`
                             );
@@ -124,8 +121,7 @@ const PayPal = () => {
             </PayPalScriptProvider>
             <Message content={message} />
         </div>
-    )
-
-}
+    );
+};
 
 export default PayPal;

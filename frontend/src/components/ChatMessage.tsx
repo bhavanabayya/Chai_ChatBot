@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import React from "react";
+import React, { useEffect } from "react";
 
 export interface Message {
     id: string;
@@ -14,22 +14,28 @@ interface ChatMessageProps {
 
 export const ChatMessage = ({ message }: ChatMessageProps) => {
     const isUser = message.sender === 'user';
-
+    
+    // Log message content and sender on render
+    useEffect(() => {
+        console.debug(`ChatMessage rendered for message ID: ${message.id}, Sender: ${message.sender}`);
+        console.debug("Message text:", message.text);
+    }, [message]);
     
     // This function will parse the message and render a button if the link pattern is found
     const renderMessageContent = () => {
         // Regular expression to find the specific pattern: 📄 [Button Text](URL)
-        // const linkRegex = /📄\[([^\]]+)\]\(([^)]+)\)/;
         const linkRegex = /(?:📄\s*)?\[(.*?)\]\((.*?)\)\.?/;
         const match = message.text.match(linkRegex);
 
         // If no link pattern is found, just return the plain text
         if (!match) {
+            console.debug("No special link pattern found in message. Rendering plain text.");
             return <>{message.text}</>;
         }
 
         // If a match is found, extract the parts
         const [fullMatch, buttonText, url] = match;
+        console.info(`Special link pattern found. Button Text: '${buttonText}', URL: '${url}'`);
 
         // Split the message text by the full matched link string to get the text before and after
         const parts = message.text.split(fullMatch);
@@ -53,7 +59,6 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
                             : "bg-blue-700 hover:bg-blue-800 text-white focus:ring-blue-500"
                     )}
                 >
-                    {/* You could add a download icon here as well */}
                     {buttonText}
                 </a>
 

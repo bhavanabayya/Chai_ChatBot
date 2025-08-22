@@ -1,8 +1,10 @@
-# tools/create_customer_tool.py
+import logging
 from langchain_core.tools import tool
 from tools.quickbooks.quickbooks_wrapper import QuickBooksWrapper
 from state.session import set_customer
 import json
+
+logger = logging.getLogger(__name__)
 
 @tool
 def create_customer_tool(session_id: str, input: str) -> str:
@@ -26,10 +28,13 @@ def create_customer_tool(session_id: str, input: str) -> str:
       {"status":"created"|"exists","id":"<QB Id>","name":"<DisplayName>"}
       or {"status":"error","message":"..."}
     """
+    logger.info(f"Tool 'create_customer_tool' called for session_id: {session_id}")
     # --- Parse input ---
     try:
         data = json.loads(input) if input and input.strip().startswith("{") else {}
-    except Exception:
+        logger.debug(f"Input data parsed: {data}")
+    except json.JSONDecodeError:
+        logger.error(f"Invalid JSON input for create_customer_tool: {input}")
         return json.dumps({"status": "error", "message": "Invalid JSON for create_customer_tool"})
 
     display_name = (data.get("display_name") or "").strip()
@@ -38,6 +43,7 @@ def create_customer_tool(session_id: str, input: str) -> str:
     address = data.get("address")
 
     if not display_name:
+        logger.error("Required 'display_name' is missing from input.")
         return json.dumps({"status": "error", "message": "display_name is required"})
 
     # --- Create or fetch customer ---
@@ -47,8 +53,9 @@ def create_customer_tool(session_id: str, input: str) -> str:
         qb_id = customer["Id"]
         qb_name = customer.get("DisplayName", display_name)
 
-        # ✅ Update centralized state (also ensures is_guest=False)
+        # Update centralized state (also ensures is_guest=False)
         set_customer(session_id, qb_id, is_guest=False)
+        logger.info(f"Customer '{qb_name}' with ID '{qb_id}' created or fetched. App state updated.")
 
         # Always return "created" status since this tool is only called when creating new customers
         # The QuickBooks wrapper handles deduplication internally, but from the agent's perspective,
@@ -60,4 +67,5 @@ def create_customer_tool(session_id: str, input: str) -> str:
         })
 
     except Exception as e:
+        logger.error(f"Failed to create or fetch customer. Error: {str(e)}", exc_info=True)
         return json.dumps({"status": "error", "message": str(e)})

@@ -12,24 +12,32 @@ interface ChatInputProps {
 
 export const ChatInput = ({ onSendMessage, isLoading = false, messages }: ChatInputProps) => {
     const [message, setMessage] = useState("");
-    const inputRef = useRef(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (inputRef.current) {
             inputRef.current.focus();
+            console.debug("ChatInput: Input field focused.");
+        } else {
+            console.warn("ChatInput: inputRef is not attached.");
         }
     }, [messages]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        console.info("ChatInput: Form submitted.");
         if (message.trim() && !isLoading) {
+            console.info("ChatInput: Sending message:", message.trim());
             onSendMessage(message.trim());
             setMessage("");
+        } else {
+            console.warn("ChatInput: Submission blocked. Message is empty or system is loading.");
         }
     };
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
         if (e.key === "Enter" && !e.shiftKey) {
+            console.debug("ChatInput: 'Enter' key pressed. Triggering form submission.");
             e.preventDefault();
             handleSubmit(e);
         }
@@ -43,7 +51,10 @@ export const ChatInput = ({ onSendMessage, isLoading = false, messages }: ChatIn
                         <Input
                             ref={inputRef}
                             value={message}
-                            onChange={(e) => setMessage(e.target.value)}
+                            onChange={(e) => {
+                                setMessage(e.target.value);
+                                console.debug("ChatInput: Message state updated.", e.target.value);
+                            }}
                             onKeyPress={handleKeyPress}
                             placeholder="Ask about products, recommendations, or anything else..."
                             className="min-h-[44px] resize-none border-message-border focus:ring-primary/20 focus:border-primary transition-all duration-200"

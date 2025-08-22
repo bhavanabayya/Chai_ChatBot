@@ -1,3 +1,4 @@
+import logging
 from langchain.agents import Tool
 
 from tools.cart.cart_tool import cart_tools
@@ -18,8 +19,13 @@ from tools.payment.paypal.paypal_tool import get_paypal_tools, order_tools
 from tools.payment.trigger_payment import trigger_payment_tool
 from tools.payment.stripe.stripe_tool import stripe_checkout_status_tool
 
+logger = logging.getLogger(__name__)
+
 def get_all_tools() -> list[Tool]:
-    return (
+    """
+    Gathers and returns all tool instances for the LangChain agent.
+    """
+    tools = (
         cart_tools
         + [
             create_invoice_tool,
@@ -37,3 +43,6 @@ def get_all_tools() -> list[Tool]:
         # + apple_pay_tools
         # + get_paypal_tools()
     )
+    
+    logger.info(f"Successfully loaded {len(tools)} tools for the agent.")
+    return tools
