@@ -219,7 +219,7 @@ def create_agent(memory: ConversationBufferMemory) -> AgentExecutor:
         4. Generate an invoice using create_invoice_tool. Send the link to the customer. Let the Customer verify that everything is correct.
         5. If the user wants to proceed, you must use `view_cart` tool and `generate_summary` tool to provide cart_items to `trigger_payment_tool` tool.
         6. If the user claims to have paid, use `stripe_checkout_status_tool` tool to see if payment has been made. DO NOT move on to the next step if the payment has not been made. Let customer know they still have to pay if that is the case.
-        7. Once Payment is complete, use `create_fedex_shipment` tool and return the tracking ID and the link to the shipping label.
+        7. Once Payment is complete, use `fedex_tool` tool and return the tracking ID and the link to the shipping label.
         8. (Mandatory) DO NOT forget to ask if and only if the customer was initially added as a guest:
             - Only ask: "Would you like to save your profile for future orders?"
             - If they say yes:
