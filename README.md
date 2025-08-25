@@ -50,7 +50,10 @@ uvicorn token_service:app --reload --port 8000
    curl http://127.0.0.1:8000/api/token/quickbooks/authorize
    ```
    Open the returned `authorize_url` in a browser.
-
+     To get the whole url run the below command in your terminal (new one):
+    ```bash
+   curl http://127.0.0.1:8000/api/token/quickbooks/authorize | ConvertFrom-Json | Select-Object -ExpandProperty authorize_url
+   ```
 2. Log in to QuickBooks Sandbox and approve the app.  
    You’ll be redirected to:
    ```
