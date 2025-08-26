@@ -16,7 +16,6 @@ from langchain.memory import ConversationBufferMemory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # Routers
-from routers.fedex import router as fedex_router
 from routers.paypal import router as paypal_router
 from routers.quickbooks import router as quickbooks_router
 from routers.customer import router as customer_router
@@ -112,31 +111,6 @@ def download_invoice(invoice_id: str):
         logger.error(f"Failed to download invoice {invoice_id}. Error: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-@app.get("/download/label/{tracking_number}")
-def download_label(tracking_number: str):
-    """
-    Streams the FedEx label PDF given a tracking number.
-    NOTE: Replace the URL logic with your persisted label lookup if available.
-    """
-    logger.info(f"Received request to download FedEx label for tracking number: {tracking_number}")
-    try:
-        label_url = f"https://www.fedex.com/label/{tracking_number}.pdf"
-        resp = requests.get(label_url, timeout=20)
-        if resp.status_code != 200:
-            logger.error(f"Failed to fetch label from FedEx. Status code: {resp.status_code}")
-            return JSONResponse(
-                status_code=resp.status_code,
-                content={"error": f"Failed to fetch label: {resp.status_code}"},
-            )
-        logger.info("Successfully fetched FedEx label.")
-        return StreamingResponse(
-            io.BytesIO(resp.content),
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=label_{tracking_number}.pdf"},
-        )
-    except Exception as e:
-        logger.error(f"An error occurred while downloading label: {e}", exc_info=True)
-        return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Agent
@@ -219,9 +193,8 @@ def create_agent(memory: ConversationBufferMemory) -> AgentExecutor:
         4. Generate an invoice using create_invoice_tool. Send the link to the customer. Let the Customer verify that everything is correct.
         5. If the user wants to proceed, you must use `view_cart` tool and `generate_summary` tool to provide cart_items to `trigger_payment_tool` tool.
         6. If the user claims to have paid, use `stripe_checkout_status_tool` tool to see if payment has been made. DO NOT move on to the next step if the payment has not been made. Let customer know they still have to pay if that is the case.
-        7. Once Payment is complete, use `fedex_tool` tool and return the tracking ID and the link to the shipping label.
-        8. (Mandatory) DO NOT forget to ask if and only if the customer was initially added as a guest:
-            - Only ask: "Would you like to save your profile for future orders?"
+        7. After the user has paid tell them "Thanks for the order" and greet.
+        8. (Mandatory) DO NOT forget to ask if and only if the customer was initially added as a guest: "Would you like to save your profile for future orders?"
             - If they say yes:
                 1) Prompt the user to provide their full details:
                     - First name
@@ -301,4 +274,4 @@ app.include_router(applepay_router)
 app.include_router(customer_router)
 app.include_router(quickbooks_router)
 app.include_router(paypal_router)
-app.include_router(fedex_router)
+
