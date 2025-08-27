@@ -28,7 +28,7 @@ const Index = () => {
         setSessionId(sessionUUID);
         console.info(`Index: New session ID generated: ${sessionUUID}`);
 
-        const newSocket = new WebSocket(`ws://localhost:8000/api/ws/${sessionUUID}`);
+        const newSocket = new WebSocket(`/api/ws/${sessionUUID}`);
         setWs(newSocket);
 
         newSocket.onopen = () => {
@@ -116,7 +116,7 @@ const Index = () => {
         setIsLoading(true);
 
         try {
-            const response = await fetch('http://localhost:8000/api/chat', {
+            const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
