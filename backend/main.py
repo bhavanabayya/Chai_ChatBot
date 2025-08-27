@@ -25,6 +25,8 @@ from routers.applepay import router as applepay_router
 from state.session import set_websocket
 from tools.tool_config import get_all_tools
 from tools.quickbooks.quickbooks_wrapper import QuickBooksWrapper
+from fastapi.staticfiles import StaticFiles
+app.mount("/", StaticFiles(directory="/app/frontend/dist", html=True), name="frontend")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Set up logging for the application
