@@ -68,7 +68,7 @@ def create_invoice_tool(input_text: str, session_id: str) -> str:
         invoice_id = invoice["Invoice"]["Id"]
         doc_number = invoice["Invoice"].get("DocNumber", invoice_id)
 
-        pdf_link = f"http://localhost:8001/download/invoice/{invoice_id}"
+        pdf_link = f"http://localhost:8000/api/download/invoice/{invoice_id}"
         logger.info(f"Successfully created Invoice #{doc_number} with PDF link: {pdf_link}")
         return f" Created Invoice #{doc_number}\n📄 [Download PDF Invoice]({pdf_link})"
     except Exception as e:
