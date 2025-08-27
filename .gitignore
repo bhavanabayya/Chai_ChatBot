@@ -88,3 +88,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+backend/static/
