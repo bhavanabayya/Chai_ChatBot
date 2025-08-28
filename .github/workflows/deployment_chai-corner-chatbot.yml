@@ -1,59 +1,76 @@
-
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 name: Deploy App Service (Chai Chatbot)
 
 on:
   push:
-    branches: [ deployment ]   # <-- change branch if needed
+    branches: [ deployment ]
   workflow_dispatch:
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - uses: actions/checkout@v4
-
-      # Build frontend
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Build frontend
-        run: |
-          cd frontend
-          echo "VITE_PAYPAL_CLIENT_ID=${{ secrets.VITE_PAYPAL_CLIENT_ID }}" >> .env
-          echo "VITE_STRIPE_PUBLISHABLE_KEY=${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}" >> .env
-          npm ci
-          npm run build
-          cd ..
-          rm -rf backend/static
-          mkdir -p backend/static
-          cp -R frontend/dist/* backend/static/
-      # Setup Python & vendor deps into the ZIP (Path B)
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Vendor backend dependencies
-        run: |
-          cd backend
-          mkdir -p .python_packages/lib/site-packages
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt --target .python_packages/lib/site-packages
-          cd ..
-      - name: Show a few vendored packages
-        run: |
-            cd backend/.python_packages/lib/site-packages
-            ls -1 | grep -E 'uvicorn|gunicorn|fastapi' || true
-      # Zip only backend folder
-      - name: Create deployment package
-        run: |
-          cd backend
-          zip -r ../backend.zip .
-          cd ..
-      # Deploy
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: "chai-corner-chatbot"
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: "backend.zip"
+    - uses: actions/checkout@v4
+    
+    # ---------- Build frontend ----------
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        
+    - name: Build frontend
+      run: |
+        cd frontend
+        echo "VITE_PAYPAL_CLIENT_ID=${{ secrets.VITE_PAYPAL_CLIENT_ID }}" >> .env
+        echo "VITE_STRIPE_PUBLISHABLE_KEY=${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}" >> .env
+        npm ci
+        npm run build
+        cd ..
+        
+    - name: Copy frontend to backend
+      run: |
+        rm -rf backend/static
+        mkdir -p backend/static
+        cp -R frontend/dist/* backend/static/
+    
+    # ---------- Setup Python and install dependencies ----------
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        
+    - name: Install dependencies
+      run: |
+        cd backend
+        python -m pip install --upgrade pip
+        # Install to standard location, not custom .python_packages
+        pip install -r requirements.txt
+        cd ..
+    
+    # ---------- Create requirements.txt with exact versions ----------
+    - name: Generate requirements.txt with versions
+      run: |
+        cd backend
+        pip freeze > requirements.txt
+        cd ..
+    
+    # ---------- Create deployment package ----------
+    - name: Create deployment package
+      run: |
+        cd backend
+        # Create a clean zip without problematic directories
+        zip -r ../app.zip . \
+          -x "**/.git/**" \
+          -x "**/__pycache__/**" \
+          -x "**/node_modules/**" \
+          -x "**/.pytest_cache/**" \
+          -x "**/venv/**" \
+          -x "**/env/**" \
+          -x "**/.python_packages/**"
+        cd ..
+        
+    # ---------- Deploy to Azure ----------
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: 'chai-corner-chatbot'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: 'app.zip'
