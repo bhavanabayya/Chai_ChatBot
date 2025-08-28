@@ -1,26 +1,23 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-# More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
 name: Deploy App Service (Chai Chatbot)
 
 on:
   push:
-    branches: [ deployment ]   # change to main if that's your deploy branch
+    branches: [ deployment ]   # <-- change branch if needed
   workflow_dispatch:
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
-      # ----- FRONTEND BUILD -----
-      - name: Setup Node
-        uses: actions/setup-node@v4
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build frontend
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Build frontend (inject Vite env)
+      - name: Build frontend
         run: |
           cd frontend
           echo "VITE_PAYPAL_CLIENT_ID=${{ secrets.VITE_PAYPAL_CLIENT_ID }}" >> .env
@@ -32,9 +29,8 @@ jobs:
           mkdir -p backend/static
           cp -R frontend/dist/* backend/static/
 
-      # ----- VENDOR PYTHON DEPENDENCIES INTO THE ARTIFACT -----
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      # Setup Python & vendor deps into the ZIP (Path B)
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Vendor backend dependencies
@@ -45,13 +41,14 @@ jobs:
           pip install -r requirements.txt --target .python_packages/lib/site-packages
           cd ..
 
-      # ----- ZIP & DEPLOY -----
-      - name: Create deployment package (backend only)
+      # Zip only backend folder
+      - name: Create deployment package
         run: |
           cd backend
           zip -r ../backend.zip .
           cd ..
 
+      # Deploy
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
