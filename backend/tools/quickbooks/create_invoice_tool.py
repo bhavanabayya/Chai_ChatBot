@@ -7,6 +7,8 @@ import sys
 import logging
 
 logger = logging.getLogger(__name__)
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+API_PREFIX = "/api"
 
 @tool("create_invoice_tool")
 def create_invoice_tool(input_text: str, session_id: str) -> str:
@@ -68,7 +70,8 @@ def create_invoice_tool(input_text: str, session_id: str) -> str:
         invoice_id = invoice["Invoice"]["Id"]
         doc_number = invoice["Invoice"].get("DocNumber", invoice_id)
 
-        pdf_link = f"http://localhost:8000/api/download/invoice/{invoice_id}"
+        path = f"{API_PREFIX}/download/invoice/{invoice_id}"
+        pdf_link = f"{PUBLIC_BASE_URL}{path}" if PUBLIC_BASE_URL else path
         logger.info(f"Successfully created Invoice #{doc_number} with PDF link: {pdf_link}")
         return f" Created Invoice #{doc_number}\n📄 [Download PDF Invoice]({pdf_link})"
     except Exception as e:
