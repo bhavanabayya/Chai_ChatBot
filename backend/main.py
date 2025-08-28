@@ -26,7 +26,27 @@ from routers.applepay import router as applepay_router
 from state.session import set_websocket
 from tools.tool_config import get_all_tools
 from tools.quickbooks.quickbooks_wrapper import QuickBooksWrapper
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pathlib import Path
 
+# Serve built frontend from backend/static
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
+    # SPA fallback: unknown paths return index.html
+    @app.get("/{full_path:path}")
+    async def spa_fallback(full_path: str):
+        index_file = static_dir / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
+        return {"detail": "Frontend not built yet"}
+
+# Simple health endpoint (for Azure probe)
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok"}
 # ──────────────────────────────────────────────────────────────────────────────
 # Set up logging for the application
 # ──────────────────────────────────────────────────────────────────────────────
