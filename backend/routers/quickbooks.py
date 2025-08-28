@@ -6,7 +6,7 @@ from tools.quickbooks.create_invoice_tool import create_invoice_tool
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/quickbooks", tags=["quickbooks"])
+router = APIRouter(prefix="/quickbooks", tags=["quickbooks"])
 
 class Item(BaseModel):
     name: str
