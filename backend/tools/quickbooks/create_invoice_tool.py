@@ -1,3 +1,4 @@
+import os
 from langchain.tools import tool
 from tools.quickbooks.quickbooks_wrapper import QuickBooksWrapper
 from state.session import get_customer
