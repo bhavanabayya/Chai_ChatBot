@@ -3,7 +3,7 @@ name: Deploy App Service (Chai Chatbot)
 
 on:
   push:
-    branches: [ deployment ]   # <-- change branch if needed
+    branches: [ deployment ]
   workflow_dispatch:
 
 jobs:
@@ -13,10 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Build frontend
+      # -------- Build frontend and copy into backend/static --------
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+
       - name: Build frontend
         run: |
           cd frontend
@@ -27,39 +28,27 @@ jobs:
           cd ..
           rm -rf backend/static
           mkdir -p backend/static
+          # if your build output folder is "build" instead of "dist", change the next line
           cp -R frontend/dist/* backend/static/
 
-      # Setup Python & vendor deps into the ZIP (Path B)
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Vendor backend dependencies
-        run: |
-          cd backend
-          mkdir -p .python_packages/lib/site-packages
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt --target .python_packages/lib/site-packages
-          cd ..
-      - name: Show a few vendored packages
-        run: |
-            cd backend/.python_packages/lib/site-packages
-            ls -1 | grep -E 'uvicorn|gunicorn|fastapi' || true
-
-      # Zip only backend folder
-      # Zip only backend folder
+      # -------- Create deployment ZIP from the *contents* of backend --------
       - name: Create deployment package
         run: |
-            cd backend
-            zip -r ../backend.zip . -x "*.python_packages/*"
-            cd ..
+          cd backend
+          # zip everything in backend (including requirements.txt) at the ZIP root
+          zip -r ../app.zip . \
+            -x "**/.git/**" "**/__pycache__/**"
+          cd ..
 
-      # Deploy
+      # -------- Deploy to Azure Web App (let Oryx build/install deps) --------
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: "chai-corner-chatbot"
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: "backend.zip"
+          package: "app.zip"
+          enable-oryx-build: true
+
 
 
 
