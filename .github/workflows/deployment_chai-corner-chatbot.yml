@@ -1,71 +1,57 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 # More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
-
-name: Build and deploy Python app to Azure Web App - chai-corner-chatbot
+name: Deploy App Service (Chai Chatbot)
 
 on:
   push:
-    branches:
-      - deployment
+    branches: [ deployment ]   # <-- change branch if needed
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read #This is required for actions/checkout
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python version
-        uses: actions/setup-python@v5
+      # Build frontend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build frontend
+        run: |
+          cd frontend
+          echo "VITE_PAYPAL_CLIENT_ID=${{ secrets.VITE_PAYPAL_CLIENT_ID }}" >> .env
+          echo "VITE_STRIPE_PUBLISHABLE_KEY=${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}" >> .env
+          npm ci
+          npm run build
+          cd ..
+          rm -rf backend/static
+          mkdir -p backend/static
+          cp -R frontend/dist/* backend/static/
+
+      # Install backend deps
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Create and start virtual environment
+      - name: Install backend deps
         run: |
-          python -m venv venv
-          source venv/bin/activate
-      
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-        
-      # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
+          cd backend
+          pip install -r requirements.txt
+          cd ..
 
-      - name: Upload artifact for deployment jobs
-        uses: actions/upload-artifact@v4
-        with:
-          name: python-app
-          path: |
-            .
-            !venv/
+      # Zip only backend folder
+      - name: Create deployment package
+        run: |
+          cd backend
+          zip -r ../backend.zip .
+          cd ..
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
-    steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: python-app
-      
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_150062118910416BB69C9F9BEA687BD0 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_092DE957576A49CBA35AA18679A61B4A }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_C94F391017224D88AAEB7CD937BE8926 }}
-
-      - name: 'Deploy to Azure Web App'
+      # Deploy
+      - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
-        id: deploy-to-webapp
         with:
-          app-name: 'chai-corner-chatbot'
-          slot-name: 'Production'
-          
+          app-name: "chai-corner-chatbot"
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: "backend.zip"
