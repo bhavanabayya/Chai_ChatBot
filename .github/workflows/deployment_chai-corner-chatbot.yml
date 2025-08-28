@@ -39,7 +39,6 @@ jobs:
         run: |
           cd backend
           python -m pip install --upgrade pip
-          # install into local folder that App Service understands
           pip install -r requirements.txt --target .python_packages/lib/site-packages
           cd ..
 
@@ -47,7 +46,7 @@ jobs:
         run: |
           ls -1 backend/.python_packages/lib/site-packages | grep -E 'fastapi|uvicorn|gunicorn' || true
 
-      # ---------- Create deployable ZIP (include .python_packages!) ----------
+      # ---------- Create deployable ZIP (includes .python_packages) ----------
       - name: Create deployment package
         run: |
           cd backend
@@ -61,8 +60,3 @@ jobs:
           app-name: "chai-corner-chatbot"
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: "app.zip"
-          # This sets the site startup command so Gunicorn serves your FastAPI app.
-          startup-command: >
-            PYTHONPATH=/home/site/wwwroot:.
-            gunicorn -w 2 -k uvicorn.workers.UvicornWorker
-            -b 0.0.0.0:8000 gateway:root
