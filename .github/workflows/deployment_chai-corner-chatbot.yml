@@ -40,6 +40,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt --target .python_packages/lib/site-packages
           cd ..
+      - name: Show a few vendored packages
+        run: |
+            cd backend/.python_packages/lib/site-packages
+            ls -1 | grep -E 'uvicorn|gunicorn|fastapi' || true
 
       # Zip only backend folder
       - name: Create deployment package
@@ -55,3 +59,4 @@ jobs:
           app-name: "chai-corner-chatbot"
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: "backend.zip"
+
