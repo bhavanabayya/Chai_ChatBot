@@ -1,6 +1,7 @@
 # Core UI and App
-fastapi
-uvicorn
+fastapi>=0.110
+uvicorn>=0.30
+gunicorn>=21.2
 
 # LangChain + OpenAI
 langchain
@@ -17,3 +18,5 @@ paypalrestsdk
 stripe
 pydantic
 pydantic[email]
+
+
