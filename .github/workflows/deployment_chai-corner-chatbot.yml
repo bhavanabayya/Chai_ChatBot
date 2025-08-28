@@ -1,4 +1,4 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# Deploy App Service (Chai Chatbot) - self-contained ZIP (no Oryx)
 name: Deploy App Service (Chai Chatbot)
 
 on:
@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # -------- Build frontend and copy into backend/static --------
+      # ---------- Build frontend ----------
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -28,27 +28,41 @@ jobs:
           cd ..
           rm -rf backend/static
           mkdir -p backend/static
-          # if your build output folder is "build" instead of "dist", change the next line
           cp -R frontend/dist/* backend/static/
 
-      # -------- Create deployment ZIP from the *contents* of backend --------
+      # ---------- Vendor Python deps into the artifact ----------
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Vendor backend dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          # install into local folder that App Service understands
+          pip install -r requirements.txt --target .python_packages/lib/site-packages
+          cd ..
+
+      - name: Sanity check vendored packages
+        run: |
+          ls -1 backend/.python_packages/lib/site-packages | grep -E 'fastapi|uvicorn|gunicorn' || true
+
+      # ---------- Create deployable ZIP (include .python_packages!) ----------
       - name: Create deployment package
         run: |
           cd backend
-          # zip everything in backend (including requirements.txt) at the ZIP root
-          zip -r ../app.zip . \
-            -x "**/.git/**" "**/__pycache__/**"
+          zip -r ../app.zip . -x "**/.git/**" "**/__pycache__/**"
           cd ..
 
-      # -------- Deploy to Azure Web App (let Oryx build/install deps) --------
+      # ---------- Deploy ----------
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: "chai-corner-chatbot"
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: "app.zip"
-          enable-oryx-build: true
-
-
-
-
+          # This sets the site startup command so Gunicorn serves your FastAPI app.
+          startup-command: >
+            PYTHONPATH=/home/site/wwwroot:.
+            gunicorn -w 2 -k uvicorn.workers.UvicornWorker
+            -b 0.0.0.0:8000 gateway:root
