@@ -64,6 +64,7 @@ origins = [
     "http://localhost:5173",
     "http://127.0.0.1:8080",
     "http://10.0.0.106:8080",
+    "https://chai-corner-chatbot-eadccabqaqhyeje9.centralus-01.azurewebsites.net",
 ]
 
 app.add_middleware(
