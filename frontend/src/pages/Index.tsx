@@ -28,7 +28,7 @@ const Index = () => {
         setSessionId(sessionUUID);
         console.info(`Index: New session ID generated: ${sessionUUID}`);
 
-        const newSocket = new WebSocket(`/api/ws/${sessionUUID}`);
+        const newSocket = new WebSocket(`wss://${window.location.host}/api/ws/${sessionUUID}`);
         setWs(newSocket);
 
         newSocket.onopen = () => {
