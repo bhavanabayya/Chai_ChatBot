@@ -243,29 +243,85 @@ class ChatRequest(BaseModel):
     session_id: str
     
 
+# @app.post("/chat")
+# async def chat_endpoint(request: ChatRequest):
+#     """
+#     Receives a message, retrieves the correct session memory,
+#     creates an agent with that memory, and returns a response.
+#     """
+#     try:
+#         session_id = request.session_id
+#         logger.info(f"Received chat request for session ID: {session_id}")
+        
+#         memory = get_memory_for_session(session_id)
+        
+#         agent_executor = create_agent(memory)
+
+#         response = await agent_executor.ainvoke({"input": request.message})
+#         logger.info(f"Agent response for session {session_id} is ready.")
+
+#         return {"response": response.get("output")}
+
+#     except Exception as e:
+#         logger.error(f"An error occurred in chat endpoint for session {session_id}: {e}", exc_info=True)
+#         return JSONResponse(status_code=500, content={"error": "An internal server error occurred."})
+
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     """
-    Receives a message, retrieves the correct session memory,
-    creates an agent with that memory, and returns a response.
+    Handles chat requests: loads session memory, builds agent, executes input,
+    and returns structured response with logs at each step.
     """
+    session_id = request.session_id
+    user_message = request.message
+    logger.info(f"[CHAT] Incoming request | session_id={session_id}, message='{user_message}'")
+
     try:
-        session_id = request.session_id
-        logger.info(f"Received chat request for session ID: {session_id}")
-        
-        memory = get_memory_for_session(session_id)
-        
-        agent_executor = create_agent(memory)
+        # Step 1: Memory
+        try:
+            memory = get_memory_for_session(session_id)
+            logger.info(f"[CHAT] Loaded memory (messages={len(memory.chat_memory.messages)})")
+        except Exception as mem_err:
+            logger.exception(f"[CHAT] Memory setup failed | session_id={session_id}")
+            return JSONResponse(
+                status_code=500,
+                content={"error": f"Memory error: {str(mem_err)}"}
+            )
 
-        response = await agent_executor.ainvoke({"input": request.message})
-        logger.info(f"Agent response for session {session_id} is ready.")
+        # Step 2: Agent
+        try:
+            agent_executor = create_agent(memory)
+            logger.info(f"[CHAT] Agent created successfully | session_id={session_id}")
+        except Exception as agent_err:
+            logger.exception(f"[CHAT] Agent creation failed | session_id={session_id}")
+            return JSONResponse(
+                status_code=500,
+                content={"error": f"Agent creation failed: {str(agent_err)}"}
+            )
 
-        return {"response": response.get("output")}
+        # Step 3: Execution
+        try:
+            response = await agent_executor.ainvoke({"input": user_message})
+            logger.info(f"[CHAT] Agent executed successfully | session_id={session_id}")
+        except Exception as exec_err:
+            logger.exception(f"[CHAT] Agent execution failed | session_id={session_id}")
+            return JSONResponse(
+                status_code=500,
+                content={"error": f"Agent execution failed: {str(exec_err)}"}
+            )
+
+        # Step 4: Output
+        output = response.get("output") if response else None
+        logger.info(f"[CHAT] Final output | session_id={session_id}, output='{output}'")
+
+        return {"response": output or "(no output)"}
 
     except Exception as e:
-        logger.error(f"An error occurred in chat endpoint for session {session_id}: {e}", exc_info=True)
-        return JSONResponse(status_code=500, content={"error": "An internal server error occurred."})
-
+        logger.exception(f"[CHAT] Unexpected error | session_id={session_id}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Unexpected error: {str(e)}"}
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
